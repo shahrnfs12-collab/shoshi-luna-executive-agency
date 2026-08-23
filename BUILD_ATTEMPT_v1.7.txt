@@ -1,0 +1,11 @@
+Build attempt command:
+./gradlew --offline testDebugUnitTest
+
+Result:
+BLOCKED_RUNTIME_VERIFICATION
+
+Reason:
+Gradle wrapper distribution gradle-9.5.0-bin.zip is not cached in this sandbox and outbound DNS/network is blocked.
+Observed failure: java.net.UnknownHostException: services.gradle.org
+
+No BUILD SUCCESSFUL claim is made for v1.7 in this environment.

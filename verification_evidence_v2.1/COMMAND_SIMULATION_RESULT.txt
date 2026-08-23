@@ -1,0 +1,5 @@
+COMMAND_SIMULATION=PASS
+missions=1
+missionTitle=????? ?????
+missionStatus=HALTED
+halt=true
