@@ -40,26 +40,32 @@ object ApiKeyManager {
         require(provider != AiProviderId.CUSTOM) { "Use saveCustomProvider for a custom provider" }
         val normalized = AiProviderRegistry.normalizeSecret(apiKey)
         require(normalized.isNotBlank()) { "API key cannot be blank" }
+        val credentialProvider = credentialProvider(provider)
         prefs(context).edit()
-            .putString(providerKey(provider), normalized)
+            .putString(providerKey(credentialProvider), normalized)
             .putString(KEY_ACTIVE_PROVIDER, provider.name)
-            .also { editor -> if (provider == AiProviderId.OPENAI) editor.putString(KEY_OPENAI_API, normalized) }
+            .also { editor -> if (credentialProvider == AiProviderId.OPENAI) editor.putString(KEY_OPENAI_API, normalized) }
             .apply()
     }
 
     fun getProviderKey(context: Context, provider: AiProviderId): String? {
-        val stored = prefs(context).getString(providerKey(provider), null)
+        val credentialProvider = credentialProvider(provider)
+        val stored = prefs(context).getString(providerKey(credentialProvider), null)
         if (!stored.isNullOrBlank()) return stored
-        return if (provider == AiProviderId.OPENAI) prefs(context).getString(KEY_OPENAI_API, null)?.takeIf { it.isNotBlank() } else null
+        return if (credentialProvider == AiProviderId.OPENAI) prefs(context).getString(KEY_OPENAI_API, null)?.takeIf { it.isNotBlank() } else null
     }
 
     fun hasProviderKey(context: Context, provider: AiProviderId): Boolean = getProviderKey(context, provider) != null
 
     fun clearProviderKey(context: Context, provider: AiProviderId) {
-        val editor = prefs(context).edit().remove(providerKey(provider))
-        if (provider == AiProviderId.OPENAI) editor.remove(KEY_OPENAI_API)
+        val credentialProvider = credentialProvider(provider)
+        val editor = prefs(context).edit().remove(providerKey(credentialProvider))
+        if (credentialProvider == AiProviderId.OPENAI) editor.remove(KEY_OPENAI_API)
         if (provider == AiProviderId.CUSTOM) editor.remove(KEY_CUSTOM_ENDPOINT).remove(KEY_CUSTOM_MODEL).remove(KEY_CUSTOM_AUTH_HEADER).remove(KEY_CUSTOM_AUTH_PREFIX)
-        if (activeProvider(context) == provider) editor.remove(KEY_ACTIVE_PROVIDER)
+        val active = activeProvider(context)
+        if (active == provider || (credentialProvider == AiProviderId.OPENROUTER && active == AiProviderId.OPENROUTER_UNCENSORED)) {
+            editor.remove(KEY_ACTIVE_PROVIDER)
+        }
         editor.apply()
     }
 
@@ -91,6 +97,11 @@ object ApiKeyManager {
     fun setActiveProvider(context: Context, provider: AiProviderId) {
         require(hasProviderKey(context, provider)) { "Provider key is not configured" }
         prefs(context).edit().putString(KEY_ACTIVE_PROVIDER, provider.name).apply()
+    }
+
+    private fun credentialProvider(provider: AiProviderId): AiProviderId = when (provider) {
+        AiProviderId.OPENROUTER_UNCENSORED -> AiProviderId.OPENROUTER
+        else -> provider
     }
 
     private fun providerKey(provider: AiProviderId): String = "$KEY_PROVIDER_PREFIX${provider.name}"
