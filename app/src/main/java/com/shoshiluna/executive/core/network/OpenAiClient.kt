@@ -113,7 +113,7 @@ object OpenAiClient {
         if (provider == AiProviderId.ANTHROPIC) requestBuilder.header("anthropic-version", "2023-06-01")
         val request = requestBuilder.post(requestBody).build()
 
-        try {
+        return try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val state = when (response.code) {
