@@ -219,8 +219,10 @@ fun DreamCommandCenterScreen() {
                                         } ?: "SYSTEM"
                                         val approval = parts.getOrNull(2) == "true"
                                         val description = parts.getOrNull(3) ?: encoded
+                                        val stepId = parts.firstOrNull().orEmpty()
+                                        val progress = mission.workPlanProgress[stepId] ?: "PENDING"
                                         Text(
-                                            "${parts.firstOrNull() ?: "•"}. $owner — $description${if (approval) " · דורש אישור" else ""}",
+                                            "${parts.firstOrNull() ?: "•"}. $owner — $description · $progress${if (approval) " · דורש אישור" else ""}",
                                             color = if (approval) DreamAmber else Color.LightGray,
                                             style = MaterialTheme.typography.bodySmall
                                         )
