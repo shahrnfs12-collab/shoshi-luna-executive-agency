@@ -23,8 +23,14 @@ object CollaborationEngine {
 
     fun startConsultation(missionId: String, initiatorId: String, targetId: String, topic: String) {
         if (EmpireMissionControl.state.value.emergencyHalt) return
-        scope.launch {
-            val conversation = CommunicationBus.startConversation(missionId, setOf(initiatorId, targetId))
+        scope.launch { runConsultation(missionId, initiatorId, targetId, topic) }
+    }
+
+    suspend fun runConsultation(missionId: String, initiatorId: String, targetId: String, topic: String) {
+        if (EmpireMissionControl.state.value.emergencyHalt) return
+        val mission = EmpireMissionControl.state.value.missions.firstOrNull { it.id == missionId } ?: return
+        if (mission.status !in setOf(MissionStatus.RUNNING, MissionStatus.EXECUTING, MissionStatus.WAITING_FOR_EXTERNAL_RESPONSE)) return
+        val conversation = CommunicationBus.startConversation(missionId, setOf(initiatorId, targetId))
             val initialRequest = InternalMessage(
                 conversationId = conversation.id,
                 missionId = missionId,
@@ -35,7 +41,7 @@ object CollaborationEngine {
             )
             if (!CommunicationBus.sendMessage(initialRequest)) {
                 EmpireMissionControl.transitionStatus(missionId, MissionStatus.FAILED, "Communication Bus denied request")
-                return@launch
+                return
             }
 
             val memory = SovereignMemoryVault.getMissionMemory(missionId) +
@@ -68,7 +74,7 @@ object CollaborationEngine {
                     MissionStatus.WAITING_FOR_EXTERNAL_RESPONSE,
                     "AI provider unavailable; no fabricated consultation result"
                 )
-                return@launch
+                return
             }
 
             val result = CollaborationResult(
@@ -104,8 +110,7 @@ object CollaborationEngine {
                     content = reply
                 )
             )
-            EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive deliverable ${artifact.id} created; human review required")
-        }
+        EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive deliverable ${artifact.id} created; human review required")
     }
 
     fun getResult(missionId: String): CollaborationResult? = results[missionId]
