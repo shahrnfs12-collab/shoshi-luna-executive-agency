@@ -14,7 +14,8 @@ data class ChatAttachment(
     val mimeType: String,
     val sizeBytes: Long,
     val category: AttachmentCategory,
-    val summary: String
+    val summary: String,
+    val safeTextPreview: String? = null
 )
 
 enum class AttachmentCategory { IMAGE, TEXT, DOCUMENT, ARCHIVE, GAME_OR_PROJECT, BINARY }
@@ -38,12 +39,11 @@ object SafeAttachmentInspector {
 
         val mime = resolver.getType(uri).orEmpty().ifBlank { "application/octet-stream" }
         val category = categoryFor(name, mime)
-        if (category == AttachmentCategory.ARCHIVE) {
-            val zipError = resolver.openInputStream(uri)?.use { input ->
-                validateZip(ZipInputStream(BufferedInputStream(input)))
-            } ?: "לא ניתן לקרוא את $name"
-            if (zipError != null) return AttachmentInspection.Rejected(zipError)
-        }
+        val zipReport = if (category == AttachmentCategory.ARCHIVE) {
+            resolver.openInputStream(uri)?.use { input -> inspectZip(ZipInputStream(BufferedInputStream(input))) }
+                ?: ZipReport("לא ניתן לקרוא את $name", emptyList())
+        } else null
+        if (zipReport?.error != null) return AttachmentInspection.Rejected(zipReport.error)
 
         val summary = when (category) {
             AttachmentCategory.IMAGE -> "תמונה מוכנה לצירוף"
@@ -53,7 +53,12 @@ object SafeAttachmentInspector {
             AttachmentCategory.GAME_OR_PROJECT -> "קובץ משחק/פרויקט התקבל לניתוח בלבד"
             AttachmentCategory.BINARY -> "קובץ בינארי התקבל לניתוח בלבד"
         }
-        return AttachmentInspection.Accepted(ChatAttachment(uri, name, mime, size, category, summary))
+        val preview = when (category) {
+            AttachmentCategory.TEXT -> resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText().take(MAX_TEXT_CHARS) }
+            AttachmentCategory.ARCHIVE -> zipReport?.entries?.joinToString(prefix = "תוכן ZIP:\n", separator = "\n")
+            else -> null
+        }
+        return AttachmentInspection.Accepted(ChatAttachment(uri, name, mime, size, category, summary, preview))
     }
 
     internal fun validateZipPath(name: String): Boolean {
@@ -63,26 +68,30 @@ object SafeAttachmentInspector {
         return normalized.split('/').none { it == ".." }
     }
 
-    private fun validateZip(zip: ZipInputStream): String? {
+    private data class ZipReport(val error: String?, val entries: List<String>)
+
+    private fun inspectZip(zip: ZipInputStream): ZipReport {
         var entries = 0
         var expanded = 0L
+        val names = mutableListOf<String>()
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         while (true) {
             val entry = zip.nextEntry ?: break
             entries++
-            if (entries > MAX_ZIP_ENTRIES) return "ZIP מכיל יותר מדי פריטים"
-            if (!validateZipPath(entry.name)) return "ZIP כולל נתיב לא בטוח: ${entry.name.take(80)}"
+            if (entries > MAX_ZIP_ENTRIES) return ZipReport("ZIP מכיל יותר מדי פריטים", names)
+            if (!validateZipPath(entry.name)) return ZipReport("ZIP כולל נתיב לא בטוח: ${entry.name.take(80)}", names)
+            if (names.size < MAX_ZIP_NAMES_IN_PROMPT) names += entry.name.take(160)
             if (!entry.isDirectory) {
                 while (true) {
                     val count = zip.read(buffer)
                     if (count < 0) break
                     expanded += count
-                    if (expanded > MAX_ZIP_EXPANDED_BYTES) return "ZIP נפתח ליותר מ־100MB ולכן נחסם"
+                    if (expanded > MAX_ZIP_EXPANDED_BYTES) return ZipReport("ZIP נפתח ליותר מ־100MB ולכן נחסם", names)
                 }
             }
             zip.closeEntry()
         }
-        return null
+        return ZipReport(null, names)
     }
 
     private fun categoryFor(name: String, mime: String): AttachmentCategory {
@@ -107,4 +116,7 @@ object SafeAttachmentInspector {
         resolver.query(uri, arrayOf(column), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) read(cursor) else null
         }
+
+    private const val MAX_TEXT_CHARS = 60_000
+    private const val MAX_ZIP_NAMES_IN_PROMPT = 250
 }
