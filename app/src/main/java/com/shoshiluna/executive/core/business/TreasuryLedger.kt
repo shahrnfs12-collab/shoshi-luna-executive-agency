@@ -33,9 +33,12 @@ object TreasuryLedger {
 
     /** Spendable truth: verified real funding minus verified/executed real spend proposals. */
     fun availableFundedBalance(): Double {
-        val funded = _allocations.value.filter { it.status == TreasuryStatus.FUNDED && it.environment == Environment.REAL }
+        val funded = _allocations.value.filter {
+            it.status == TreasuryStatus.FUNDED && it.environment == Environment.REAL &&
+                kotlin.math.abs(it.allocationRate - 0.05) < 0.000001 && it.verifiedNetProfit > 0.0
+        }
             .sumOf { it.allocationAmount }
-        val committed = _spendProposals.value.filter { it.status in setOf(SpendStatus.EXECUTED, SpendStatus.VERIFIED) }
+        val committed = _spendProposals.value.filter { it.status != SpendStatus.REJECTED }
             .sumOf { it.amount }
         return (funded - committed).coerceAtLeast(0.0)
     }
