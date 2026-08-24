@@ -207,7 +207,7 @@ private fun MissionsScreen(highlightedMissionId: String? = null) {
         if (index >= 0) listState.animateScrollToItem(index + 2)
     }
     LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header("Mission Control", "Evidence-first executive task orchestration") }
+        item { Header("מרכז המשימות", "ניהול עבודה מבוסס ראיות") }
         item {
             ElevatedCard(Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -234,7 +234,7 @@ private fun MissionsScreen(highlightedMissionId: String? = null) {
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(mission.title, color = Gold, fontWeight = FontWeight.Bold)
-                    Text("${mission.ownerId} • ${mission.status} • Evidence required")
+                    Text("${mission.ownerId} • ${mission.status} • נדרשות ראיות")
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(
                             enabled = !state.emergencyHalt && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.RUNNING),
@@ -266,7 +266,7 @@ private fun MissionsScreen(highlightedMissionId: String? = null) {
 private fun MoreExecutiveScreen() {
     var section by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
-        Header("Executive Systems", "Specialists • Pipeline • Memory • Presence")
+        Header("מערכות הסוכנות", "מומחים • צנרת • זיכרון • נוכחות")
         ScrollableTabRow(selectedTabIndex = section, containerColor = Color(0xFF0B0B0B), contentColor = Gold) {
             listOf("סוכנים", "צנרת", "רשת", "זיכרון", "נוכחות", "AI Fabric").forEachIndexed { index, label ->
                 Tab(selected = section == index, onClick = { section = index }, text = { Text(label) })
