@@ -189,6 +189,26 @@ fun DreamCommandCenterScreen() {
                             Column(Modifier.weight(1f)) {
                                 Text(mission.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                                 Text("${mission.status} • ${if (mission.ownerId == ExecutiveAgent.SHOSHI.id) "SHOSHI" else if (mission.ownerId == ExecutiveAgent.LUNA.id) "LUNA" else mission.ownerId}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                if (mission.workPlan.isNotEmpty()) {
+                                    Spacer(Modifier.height(5.dp))
+                                    mission.workPlan.forEach { encoded ->
+                                        val parts = encoded.split("|", limit = 4)
+                                        val owner = parts.getOrNull(1)?.let {
+                                            when (it) {
+                                                ExecutiveAgent.SHOSHI.id -> "SHOSHI"
+                                                ExecutiveAgent.LUNA.id -> "LUNA"
+                                                else -> it
+                                            }
+                                        } ?: "SYSTEM"
+                                        val approval = parts.getOrNull(2) == "true"
+                                        val description = parts.getOrNull(3) ?: encoded
+                                        Text(
+                                            "${parts.firstOrNull() ?: "•"}. $owner — $description${if (approval) " · דורש אישור" else ""}",
+                                            color = if (approval) DreamAmber else Color.LightGray,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
