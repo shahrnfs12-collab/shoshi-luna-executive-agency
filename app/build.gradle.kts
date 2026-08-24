@@ -20,6 +20,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            resValue("string", "app_name", "ShoshiLuna Test")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
