@@ -31,7 +31,11 @@ enum class AiConnectionState {
 }
 
 sealed interface AiCallResult {
-    data class Success(val text: String) : AiCallResult
+    data class Success(
+        val text: String,
+        val provider: AiProviderId? = null,
+        val taskProfile: AiTaskProfile? = null
+    ) : AiCallResult
     data class Failure(val state: AiConnectionState, val safeMessage: String, val httpCode: Int? = null) : AiCallResult
 }
 
