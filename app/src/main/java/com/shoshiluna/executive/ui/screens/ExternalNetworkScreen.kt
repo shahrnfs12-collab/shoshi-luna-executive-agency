@@ -27,15 +27,15 @@ fun ExternalNetworkScreen() {
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("EXTERNAL AGENT NETWORK", color = NetworkGold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-            Text("Trusted registry • handshake • approval firewall • quarantine • evidence", color = Color.Gray)
+            Text("רשת סוכנים וכלים חיצוניים", color = NetworkGold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+            Text("רישום מאובטח • אימות זהות • חומת אישורים • הסגר • ראיות", color = Color.Gray)
         }
         item {
             ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = NetworkPanel), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("REGISTER CANDIDATE", color = NetworkGold, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(name, { name = it }, label = { Text("Display name") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(endpoint, { endpoint = it }, label = { Text("HTTPS endpoint") }, modifier = Modifier.fillMaxWidth())
+                    Text("רישום מועמד חדש", color = NetworkGold, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(name, { name = it }, label = { Text("שם השירות או הסוכן") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(endpoint, { endpoint = it }, label = { Text("כתובת HTTPS") }, modifier = Modifier.fillMaxWidth())
                     var expanded by remember { mutableStateOf(false) }
                     Box {
                         OutlinedButton(onClick = { expanded = true }) { Text(protocol.name) }
@@ -56,14 +56,14 @@ fun ExternalNetworkScreen() {
                             status = result.fold({ "Candidate registered as PENDING: ${it.id.take(8)}" }, { "Rejected: ${it.message}" })
                             if (result.isSuccess) { name = ""; endpoint = "" }
                         }
-                    ) { Text("Register candidate") }
+                    ) { Text("רישום כמועמד") }
                     status?.let { Text(it, color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
                 }
             }
         }
 
         if (agents.isEmpty()) {
-            item { Text("No external agents registered.", color = Color.Gray) }
+            item { Text("לא נרשמו עדיין סוכנים או שירותים חיצוניים.", color = Color.Gray) }
         }
         items(agents.values.toList(), key = { it.id }) { agent ->
             ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = NetworkPanel), shape = RoundedCornerShape(20.dp)) {
@@ -86,7 +86,7 @@ fun ExternalNetworkScreen() {
                                         { "Handshake failed; trust not granted: ${it.message}" }
                                     )
                                 }
-                            }) { Text("Handshake + Trust") }
+                            }) { Text("אימות זהות + מתן אמון") }
                         }
                         if (agent.trustStatus == ExternalTrustStatus.TRUSTED) {
                             OutlinedButton(onClick = {
@@ -97,11 +97,11 @@ fun ExternalNetworkScreen() {
                                         { "Handshake failed: ${it.message}" }
                                     )
                                 }
-                            }) { Text("Handshake") }
-                            OutlinedButton(onClick = { TrustedExternalAgentRegistry.suspend(agent.id) }) { Text("Suspend") }
+                            }) { Text("בדיקת חיבור") }
+                            OutlinedButton(onClick = { TrustedExternalAgentRegistry.suspend(agent.id) }) { Text("השעיה") }
                         }
                         if (agent.trustStatus != ExternalTrustStatus.REVOKED) {
-                            TextButton(onClick = { TrustedExternalAgentRegistry.revoke(agent.id) }) { Text("Revoke") }
+                            TextButton(onClick = { TrustedExternalAgentRegistry.revoke(agent.id) }) { Text("ביטול אמון") }
                         }
                     }
                 }
@@ -109,7 +109,7 @@ fun ExternalNetworkScreen() {
         }
         item {
             Text(
-                "No message crosses the network merely because an AI suggested it. Sending requires an authorized mission, COMMUNICATE_EXTERNAL permission and explicit Human Approval.",
+                "שום הודעה אינה יוצאת רק מפני שמוח AI הציע זאת. שליחה דורשת משימה מורשית, הרשאת תקשורת חיצונית ואישור מפורש שלך.",
                 color = Color.Gray,
                 style = MaterialTheme.typography.bodySmall
             )
