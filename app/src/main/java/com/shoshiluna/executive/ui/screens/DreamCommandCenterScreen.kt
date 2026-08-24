@@ -454,7 +454,15 @@ private fun SafeRasterExecutive(resourceId: Int, description: String, modifier: 
     val context = LocalContext.current
     val bitmap = remember(resourceId) {
         runCatching {
-            context.resources.openRawResource(resourceId).use { stream -> BitmapFactory.decodeStream(stream) }
+            // Full-size executive PNGs are far larger than their on-screen target. Decoding both
+            // at source size can make the second agent silently fail on memory-constrained phones.
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = 2
+                inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+            }
+            context.resources.openRawResource(resourceId).use { stream ->
+                requireNotNull(BitmapFactory.decodeStream(stream, null, options))
+            }
         }.getOrNull()
     }
     if (bitmap != null) {
