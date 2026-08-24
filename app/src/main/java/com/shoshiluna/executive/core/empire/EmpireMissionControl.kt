@@ -29,7 +29,8 @@ data class EmpireMission(
     val resumePolicy: String? = null,
     val correlationId: String? = null,
     val taskDependencies: List<String> = emptyList(),
-    val workPlan: List<String> = emptyList()
+    val workPlan: List<String> = emptyList(),
+    val workPlanProgress: Map<String, String> = emptyMap()
 )
 
 data class EmpireState(
@@ -96,12 +97,33 @@ object EmpireMissionControl {
             if (mission.id == missionId) {
                 found = true
                 check(mission.status == MissionStatus.CREATED) { "Plan can only be attached to a created mission" }
-                mission.copy(workPlan = workPlan.toList(), updatedAt = System.currentTimeMillis())
+                mission.copy(
+                    workPlan = workPlan.toList(),
+                    workPlanProgress = workPlan.mapNotNull { it.substringBefore("|").takeIf(String::isNotBlank) }.associateWith { "PENDING" },
+                    updatedAt = System.currentTimeMillis()
+                )
             } else mission
         })
         require(found) { "Unknown missionId: $missionId" }
         persist()
         audit("SYSTEM", missionId, "MISSION_PLAN_ATTACHED", "steps=${workPlan.size}")
+    }
+
+    @Synchronized
+    fun updatePlanStep(missionId: String, step: Int, status: String, reason: String) {
+        require(step > 0 && status in setOf("PENDING", "RUNNING", "COMPLETED", "WAITING", "WAITING_APPROVAL", "FAILED"))
+        require(reason.isNotBlank())
+        var found = false
+        _state.value = _state.value.copy(missions = _state.value.missions.map { mission ->
+            if (mission.id == missionId) {
+                found = true
+                require(mission.workPlan.any { it.substringBefore("|") == step.toString() }) { "Unknown plan step" }
+                mission.copy(workPlanProgress = mission.workPlanProgress + (step.toString() to status), updatedAt = System.currentTimeMillis())
+            } else mission
+        })
+        require(found) { "Unknown missionId: $missionId" }
+        persist()
+        audit("SYSTEM", missionId, "MISSION_STEP_$step", "$status; ${reason.trim()}")
     }
 
     @Synchronized
