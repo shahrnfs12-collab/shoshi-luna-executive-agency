@@ -7,6 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import com.shoshiluna.executive.core.business.ArtifactFactory
+import com.shoshiluna.executive.core.business.ArtifactType
+import com.shoshiluna.executive.core.business.EvidenceCategory
+import com.shoshiluna.executive.core.business.EvidenceRegistry
 
 /**
  * Executive consultation workflow. No canned "success" responses.
@@ -75,6 +79,19 @@ object CollaborationEngine {
                 finalOutput = reply
             )
             results[missionId] = result
+            val artifact = ArtifactFactory.createArtifact(
+                type = ArtifactType.REPORT,
+                agentId = targetId,
+                taskId = conversation.id,
+                content = reply
+            )
+            EvidenceRegistry.record(
+                category = EvidenceCategory.AI_INFERENCE,
+                content = "Executive deliverable created with SHA-256 ${artifact.hash}",
+                source = "CollaborationEngine",
+                missionId = missionId,
+                correlationId = artifact.id
+            )
             SovereignMemoryVault.record(
                 SovereignMemory(
                     partition = MemoryPartition.MISSION_SCOPED,
@@ -83,7 +100,7 @@ object CollaborationEngine {
                     content = reply
                 )
             )
-            EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive consultation produced analysis; human review required")
+            EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive deliverable ${artifact.id} created; human review required")
         }
     }
 
