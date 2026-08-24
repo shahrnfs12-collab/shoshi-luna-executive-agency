@@ -43,7 +43,7 @@ class NotificationNavigationRuntimeTest {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
         ActivityScenario.launch<MainActivity>(intent).use {
-            composeRule.onNodeWithText("Mission Control").assertIsDisplayed()
+            composeRule.onNodeWithText("מרכז המשימות").assertIsDisplayed()
         }
     }
 
@@ -67,7 +67,7 @@ class NotificationNavigationRuntimeTest {
 
         ActivityScenario.launch<MainActivity>(intent).use {
             composeRule.onNodeWithText("אישור התוצר").performClick()
-            composeRule.onNodeWithText("SHOSHI • COMPLETED • Evidence required").assertIsDisplayed()
+            composeRule.onNodeWithText("SHOSHI • COMPLETED • נדרשות ראיות").assertIsDisplayed()
         }
     }
 
