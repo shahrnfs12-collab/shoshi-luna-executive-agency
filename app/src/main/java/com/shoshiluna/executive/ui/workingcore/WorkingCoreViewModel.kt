@@ -36,7 +36,8 @@ data class WorkingCoreUiState(
     val isSending: Boolean = false,
     val messages: List<WorkingCoreMessage> = emptyList(),
     val error: String? = null,
-    val speakMessageId: String? = null
+    val speakMessageId: String? = null,
+    val routingLabel: String? = null
 )
 
 class WorkingCoreViewModel(
@@ -122,6 +123,7 @@ class WorkingCoreViewModel(
                         isSending = false,
                         messages = _uiState.value.messages + answer,
                         error = null,
+                        routingLabel = listOfNotNull(result.taskProfile?.name, result.provider?.name).joinToString(" • ").ifBlank { null },
                         speakMessageId = if (speakResponse) answer.id else null
                     )
                 }
