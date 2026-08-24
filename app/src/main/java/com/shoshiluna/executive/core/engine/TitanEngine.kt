@@ -6,6 +6,7 @@ import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.business.ArtifactFactory
 import com.shoshiluna.executive.core.evolution.EvolutionEngine
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import com.shoshiluna.executive.core.fabric.AgencyBrainCouncil
 import com.shoshiluna.executive.core.business.BuiltInToolBootstrap
 import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
@@ -46,6 +47,7 @@ object TitanEngine {
         ArtifactFactory.initialize(context)
         EvolutionEngine.initialize(context)
         HumanApprovalGateway.initialize(context)
+        AgencyBrainCouncil.initialize(context)
         BuiltInToolBootstrap.initialize()
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
