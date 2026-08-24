@@ -18,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -365,37 +367,37 @@ private fun ExecutiveVisionCarousel(
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("מרכז השליטה", color = DreamGold, fontWeight = FontWeight.Black)
-        Box(Modifier.fillMaxWidth().height(390.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(610.dp)
+                .clip(RoundedCornerShape(34.dp))
+                .background(Brush.radialGradient(listOf(Color(0x55351E06), Color.Black)))
+        ) {
             Image(
-                painterResource(R.drawable.shoshi_executive),
-                "SHOSHI",
-                Modifier.align(Alignment.BottomStart).padding(start = 2.dp).width(105.dp).height(300.dp).clip(RoundedCornerShape(topEnd = 40.dp)),
-                contentScale = ContentScale.Crop
-            )
-            Image(
-                painterResource(R.drawable.luna_executive),
-                "LUNA",
-                Modifier.align(Alignment.BottomEnd).padding(end = 2.dp).width(105.dp).height(300.dp).clip(RoundedCornerShape(topStart = 40.dp)),
+                painterResource(R.drawable.command_center),
+                null,
+                Modifier.fillMaxSize().alpha(0.22f),
                 contentScale = ContentScale.Crop
             )
             HorizontalPager(
                 state = pagerState,
-                contentPadding = PaddingValues(horizontal = 58.dp),
-                pageSpacing = 10.dp,
-                modifier = Modifier.fillMaxSize()
+                contentPadding = PaddingValues(horizontal = 42.dp),
+                pageSpacing = 14.dp,
+                modifier = Modifier.fillMaxWidth().height(420.dp).zIndex(1f)
             ) { page ->
                 val panel = panels[page]
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp)
+                        .padding(vertical = 10.dp)
                         .background(
-                            Brush.verticalGradient(listOf(Color(0xE6292114), Color(0xF00A0B0E))),
-                            RoundedCornerShape(34.dp)
+                            Brush.verticalGradient(listOf(Color(0xE636220C), Color(0xF20A0B0E))),
+                            RoundedCornerShape(topStart = 52.dp, topEnd = 52.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
                         )
-                        .border(1.dp, DreamGold.copy(alpha = 0.70f), RoundedCornerShape(34.dp))
+                        .border(1.5.dp, DreamGold.copy(alpha = 0.85f), RoundedCornerShape(topStart = 52.dp, topEnd = 52.dp, bottomStart = 28.dp, bottomEnd = 28.dp))
                         .clickable { onOpen(page) }
-                        .padding(horizontal = 22.dp, vertical = 24.dp),
+                        .padding(horizontal = 22.dp, vertical = 22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -411,10 +413,28 @@ private fun ExecutiveVisionCarousel(
                             Text(row, color = Color.White, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    Button(onClick = { onOpen(page) }, colors = ButtonDefaults.buttonColors(containerColor = DreamGold)) {
-                        Text("פתחי מסך", color = Color.Black, fontWeight = FontWeight.Black)
-                    }
                 }
+            }
+            Image(
+                painterResource(R.drawable.shoshi_cutout),
+                "SHOSHI",
+                Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f),
+                contentScale = ContentScale.Fit
+            )
+            Image(
+                painterResource(R.drawable.luna_cutout),
+                "LUNA",
+                Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f),
+                contentScale = ContentScale.Fit
+            )
+            Button(
+                onClick = { onOpen(pagerState.currentPage) },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).width(236.dp).height(58.dp).zIndex(3f),
+                colors = ButtonDefaults.buttonColors(containerColor = DreamGold),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Color(0xFFFFDB86))
+            ) {
+                Text("פתחי מסך", color = Color.Black, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
