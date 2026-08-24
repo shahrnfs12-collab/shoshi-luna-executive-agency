@@ -7,6 +7,9 @@ import com.shoshiluna.executive.core.health.SystemHealthManager
 import com.shoshiluna.executive.core.hardening.CapabilityRegistry
 import com.shoshiluna.executive.core.hardening.CapabilityStatus
 import com.shoshiluna.executive.core.security.ApiKeyManager
+import com.shoshiluna.executive.core.fabric.FabricAuditLedger
+import com.shoshiluna.executive.core.fabric.ProviderHealthMonitor
+import com.shoshiluna.executive.core.fabric.SecureCredentialBroker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -64,7 +67,8 @@ object OpenAiClient {
         messages: List<ChatMessage>,
         model: String = DEFAULT_MODEL,
         providerOverride: AiProviderId? = null,
-        images: List<AiImageInput> = emptyList()
+        images: List<AiImageInput> = emptyList(),
+        resolvedModelOverride: String? = null
     ): AiCallResult = withContext(Dispatchers.IO) {
         val context = appContext ?: return@withContext fail(
             AiConnectionState.OFFLINE,
@@ -72,8 +76,7 @@ object OpenAiClient {
         )
 
         val provider = providerOverride ?: ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
-        val apiKey = ApiKeyManager.getProviderKey(context, provider)
-        if (apiKey.isNullOrBlank()) {
+        if (!ApiKeyManager.hasProviderKey(context, provider)) {
             return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
         }
 
@@ -83,8 +86,26 @@ object OpenAiClient {
             if (message.role == "user") message.content else "${message.role}: ${message.content}"
         }
         val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
-        val effectiveModel = if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
+        val effectiveModel = resolvedModelOverride ?: if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
         val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input, images).toRequestBody(mediaType)
+        val startedAt = System.currentTimeMillis()
+        val result = SecureCredentialBroker.withCredential(context, SecureCredentialBroker.reference(provider)) { apiKey ->
+            executeProviderCall(provider, protocol, apiKey, requestBody, effectiveModel)
+        }
+        val elapsed = System.currentTimeMillis() - startedAt
+        val success = result is AiCallResult.Success
+        ProviderHealthMonitor.record(provider.name, success, elapsed)
+        FabricAuditLedger.append("PROVIDER_CALL", modelId = (result as? AiCallResult.Success)?.model ?: effectiveModel, outcome = if (success) "SUCCESS:${elapsed}ms" else "FAILED:${elapsed}ms")
+        result
+    }
+
+    private fun executeProviderCall(
+        provider: AiProviderId,
+        protocol: AiProviderProtocol,
+        apiKey: String,
+        requestBody: okhttp3.RequestBody,
+        effectiveModel: String
+    ): AiCallResult {
         val requestBuilder = Request.Builder()
             .url(protocol.endpoint)
             .header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
@@ -101,17 +122,17 @@ object OpenAiClient {
                         in 500..599 -> AiConnectionState.ERROR
                         else -> AiConnectionState.ERROR
                     }
-                    return@withContext fail(state, safeHttpMessage(provider, response.code), response.code)
+                    return fail(state, safeHttpMessage(provider, response.code), response.code)
                 }
 
                 val body = response.body?.string().orEmpty()
                 if (body.isBlank()) {
-                    return@withContext fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
+                    return fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
                 }
 
                 val text = AiProviderPayloadCodec.decodeText(provider, body)
                 if (text.isBlank()) {
-                    return@withContext fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
+                    return fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
                 }
 
                 SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated provider response")
