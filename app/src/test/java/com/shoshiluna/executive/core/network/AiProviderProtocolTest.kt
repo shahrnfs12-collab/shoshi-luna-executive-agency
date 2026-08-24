@@ -15,7 +15,13 @@ class AiProviderProtocolTest {
     }
 
     @Test fun `gemini uses dedicated api key header`() {
-        assertEquals("x-goog-api-key", AiProviderProtocols.forProvider(AiProviderId.GOOGLE_GEMINI).authenticationHeader)
+        val protocol = AiProviderProtocols.forProvider(AiProviderId.GOOGLE_GEMINI)
+        assertEquals("x-goog-api-key", protocol.authenticationHeader)
+        assertEquals("gemini-3.7-flash", protocol.defaultModel)
+    }
+
+    @Test fun `openrouter delegates model choice to its task aware auto router`() {
+        assertEquals("openrouter/auto", AiProviderProtocols.forProvider(AiProviderId.OPENROUTER).defaultModel)
     }
 
     @Test fun `custom provider rejects insecure endpoint`() {
