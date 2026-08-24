@@ -233,7 +233,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         }
                     }
                     Text(
-                        "Production security gate: provider API secrets must move to a server-side relay before public release.",
+                        "שער אבטחה: לפני הפצה ציבורית יש להעביר סודות ספקים למתווך מאובטח בצד השרת.",
                         color = Color.Gray,
                         style = MaterialTheme.typography.bodySmall
                     )
