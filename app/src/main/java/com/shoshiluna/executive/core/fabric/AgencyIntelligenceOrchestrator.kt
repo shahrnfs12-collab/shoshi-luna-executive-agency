@@ -122,7 +122,11 @@ object AgencyGrowthAutopilot {
         appContext = context.applicationContext
         val prefs = context.getSharedPreferences("agency_ai_growth_v1", Context.MODE_PRIVATE)
         val type = object : TypeToken<List<GrowthCapabilityNeed>>() {}.type
-        runCatching { gson.fromJson<List<GrowthCapabilityNeed>>(prefs.getString("needs", "[]"), type) }.getOrNull().orEmpty()
+        val restored = runCatching { gson.fromJson<List<GrowthCapabilityNeed>>(prefs.getString("needs", "[]"), type) }
+        if (restored.isFailure) {
+            prefs.edit().putString("corrupt_needs_backup", prefs.getString("needs", "")).remove("needs").remove("proposed").commit()
+        }
+        restored.getOrNull().orEmpty()
             .filter { ModelRegistry.get(it.modelId) != null }.forEach { queued[it.id] = it }
         proposed.addAll(prefs.getStringSet("proposed", emptySet()).orEmpty())
         _needs.value = queued.values.sortedBy { it.quotedMonthlyUsd }
