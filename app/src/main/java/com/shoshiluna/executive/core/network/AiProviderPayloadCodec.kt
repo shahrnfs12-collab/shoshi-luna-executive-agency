@@ -19,14 +19,13 @@ object AiProviderPayloadCodec {
                 if (!instructions.isNullOrBlank()) put("system_instruction", mapOf("parts" to listOf(mapOf("text" to instructions))))
                 put("contents", listOf(mapOf("role" to "user", "parts" to listOf(mapOf("text" to input)))))
             }
-            AiProviderId.OPENROUTER -> mapOf(
+            AiProviderId.OPENROUTER, AiProviderId.CUSTOM -> mapOf(
                 "model" to model,
                 "messages" to buildList {
                     if (!instructions.isNullOrBlank()) add(mapOf("role" to "system", "content" to instructions))
                     add(mapOf("role" to "user", "content" to input))
                 }
             )
-            AiProviderId.CUSTOM -> throw IllegalArgumentException("Custom provider codec is not configured")
         }
         return gson.toJson(payload)
     }
@@ -41,9 +40,8 @@ object AiProviderPayloadCodec {
             AiProviderId.GOOGLE_GEMINI -> root.getAsJsonArray("candidates")?.firstOrNull()?.asJsonObject
                 ?.getAsJsonObject("content")?.getAsJsonArray("parts")?.mapNotNull { it.asJsonObject.get("text")?.asString }
                 ?.joinToString("\n").orEmpty()
-            AiProviderId.OPENROUTER -> root.getAsJsonArray("choices")?.firstOrNull()?.asJsonObject
+            AiProviderId.OPENROUTER, AiProviderId.CUSTOM -> root.getAsJsonArray("choices")?.firstOrNull()?.asJsonObject
                 ?.getAsJsonObject("message")?.get("content")?.asString.orEmpty()
-            AiProviderId.CUSTOM -> ""
         }.trim()
     }
 
