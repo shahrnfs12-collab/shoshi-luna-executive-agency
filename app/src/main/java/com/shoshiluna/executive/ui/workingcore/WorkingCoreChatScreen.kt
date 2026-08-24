@@ -33,6 +33,8 @@ import com.shoshiluna.executive.core.agent.ExecutiveAgent
 import com.shoshiluna.executive.core.attachments.AttachmentInspection
 import com.shoshiluna.executive.core.attachments.ChatAttachment
 import com.shoshiluna.executive.core.attachments.SafeAttachmentInspector
+import com.shoshiluna.executive.core.fabric.ModelRegistry
+import com.shoshiluna.executive.core.fabric.PublicCatalogDiscovery
 import com.shoshiluna.executive.core.network.AiConnectionState
 import com.shoshiluna.executive.core.network.AiProviderId
 import com.shoshiluna.executive.core.network.AiProviderRegistry
@@ -69,6 +71,9 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var customModel by remember { mutableStateOf("") }
     var providerHealth by remember { mutableStateOf<Map<AiProviderId, String>>(emptyMap()) }
     var testingAllProviders by remember { mutableStateOf(false) }
+    var discoveringCatalog by remember { mutableStateOf(false) }
+    var catalogStatus by remember { mutableStateOf<String?>(null) }
+    val catalogModels by ModelRegistry.models.collectAsState()
     var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
     var attachments by remember { mutableStateOf<List<ChatAttachment>>(emptyList()) }
     var attachmentStatus by remember { mutableStateOf<String?>(null) }
@@ -189,6 +194,44 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         else "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
                         color = Color.LightGray
                     )
+                    Surface(color = ChatGold.copy(alpha = 0.08f), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("מאגר Intelligence Fabric", color = ChatGold, fontWeight = FontWeight.Bold)
+                            Text("${catalogModels.size} מתוך ${ModelRegistry.MAX_MODELS} מנועים מקוטלגים", color = Color.White)
+                            Text(
+                                "${ModelRegistry.verified().size} אומתו בקריאה חיה • ${ApiKeyManager.configuredProviders(context).size} ספקים מחוברים",
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "המאגר כולל מודלים, לא מפתחות. מפתחות פרטיים נוספים רק מחשבונות מורשים שלך ונשמרים מוצפנים.",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Button(
+                                enabled = !discoveringCatalog,
+                                onClick = {
+                                    discoveringCatalog = true
+                                    catalogStatus = "סורקת קטלוגים ציבוריים…"
+                                    scope.launch {
+                                        val results = withContext(Dispatchers.IO) {
+                                            buildList {
+                                                add(PublicCatalogDiscovery.discoverHuggingFace())
+                                                if (ApiKeyManager.hasProviderKey(context, AiProviderId.OPENROUTER)) {
+                                                    add(PublicCatalogDiscovery.discoverOpenRouter(context))
+                                                }
+                                            }
+                                        }
+                                        val accepted = results.sumOf { it.accepted }
+                                        val failed = results.sumOf { it.failed }
+                                        catalogStatus = "הסריקה הסתיימה: ${ModelRegistry.all().size}/${ModelRegistry.MAX_MODELS} במאגר • $accepted נוספו/עודכנו • $failed נכשלו"
+                                        discoveringCatalog = false
+                                    }
+                                }
+                            ) { Text(if (discoveringCatalog) "סורקת…" else "עדכון מאגר המנועים") }
+                            catalogStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
                     Text(
                         "Production security gate: provider API secrets must move to a server-side relay before public release.",
                         color = Color.Gray,
