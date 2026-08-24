@@ -204,7 +204,7 @@ object SafeAttachmentInspector {
             }
             zip.closeEntry()
         }
-        return result.take(MAX_TEXT_CHARS)
+        return result.take(MAX_TEXT_CHARS).toString()
     }
 
     internal fun detectProjectType(paths: List<String>): String? = when {
