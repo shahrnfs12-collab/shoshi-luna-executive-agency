@@ -15,13 +15,13 @@ class AiFabricTest {
 
     @Test fun internalDataCannotRouteToOpenPolicyPool() {
         val local = requireNotNull(ModelRegistry.get("local/custom-open-weight"))
-        val decision = FabricPolicyEngine.authorize(local, TaskRequirements(setOf(FabricCapability.GENERAL_LLM)))
+        val decision = FabricPolicyEngine.authorize(local, TaskRequirements(capabilities = setOf(FabricCapability.GENERAL_LLM)))
         assertFalse(decision.allowed)
     }
 
     @Test fun configuredProviderGetsPrimaryAndFallbackDecision() {
         val result = MetaRouter.route(
-            TaskRequirements(setOf(FabricCapability.GENERAL_LLM), sensitivity = DataSensitivity.INTERNAL),
+            TaskRequirements(capabilities = setOf(FabricCapability.GENERAL_LLM), sensitivity = DataSensitivity.INTERNAL),
             setOf("openai")
         )
         assertTrue(result.isSuccess)
