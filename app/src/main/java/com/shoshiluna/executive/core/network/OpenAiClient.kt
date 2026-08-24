@@ -63,7 +63,8 @@ object OpenAiClient {
     suspend fun getCompletionResult(
         messages: List<ChatMessage>,
         model: String = DEFAULT_MODEL,
-        providerOverride: AiProviderId? = null
+        providerOverride: AiProviderId? = null,
+        images: List<AiImageInput> = emptyList()
     ): AiCallResult = withContext(Dispatchers.IO) {
         val context = appContext ?: return@withContext fail(
             AiConnectionState.OFFLINE,
@@ -83,7 +84,7 @@ object OpenAiClient {
         }
         val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
         val effectiveModel = if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
-        val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input).toRequestBody(mediaType)
+        val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input, images).toRequestBody(mediaType)
         val requestBuilder = Request.Builder()
             .url(protocol.endpoint)
             .header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
