@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
@@ -29,6 +30,9 @@ fun SpatialRenderer(
 ) {
     val shoshiPos by DigitalHumanController.shoshiPosition.collectAsState()
     val lunaPos by DigitalHumanController.lunaPosition.collectAsState()
+    val shoshiAnim by DigitalHumanController.shoshiAnim.collectAsState()
+    val lunaAnim by DigitalHumanController.lunaAnim.collectAsState()
+    val activeClips = remember { mutableMapOf<String, String>() }
     val shoshiX by animateFloatAsState(shoshiPos.x, tween(1400), label = "shoshi-x")
     val shoshiY by animateFloatAsState(shoshiPos.y, tween(1400), label = "shoshi-y")
     val shoshiZ by animateFloatAsState(shoshiPos.z, tween(1400), label = "shoshi-z")
@@ -43,10 +47,11 @@ fun SpatialRenderer(
                 shoshiModelPath?.let { path ->
                     runCatching {
                         val instance = modelLoader.createModelInstance(path)
-                        ModelNode(modelInstance = instance, scaleToUnits = 1.7f, autoAnimate = true).also { node ->
+                        ModelNode(modelInstance = instance, scaleToUnits = 1.7f, autoAnimate = false).also { node ->
                             node.name = ExecutiveAvatar.SHOSHI.id
                             node.position = Position(shoshiX, shoshiY, shoshiZ)
                             node.isEditable = true
+                            animationClip(shoshiAnim).let { clip -> node.playAnimation(clip, loop = true); activeClips[node.name] = clip }
                             addChildNode(node)
                         }
                     }
@@ -55,10 +60,11 @@ fun SpatialRenderer(
                 lunaModelPath?.let { path ->
                     runCatching {
                         val instance = modelLoader.createModelInstance(path)
-                        ModelNode(modelInstance = instance, scaleToUnits = 1.7f, autoAnimate = true).also { node ->
+                        ModelNode(modelInstance = instance, scaleToUnits = 1.7f, autoAnimate = false).also { node ->
                             node.name = ExecutiveAvatar.LUNA.id
                             node.position = Position(lunaX, lunaY, lunaZ)
                             node.isEditable = true
+                            animationClip(lunaAnim).let { clip -> node.playAnimation(clip, loop = true); activeClips[node.name] = clip }
                             addChildNode(node)
                         }
                     }
@@ -69,11 +75,34 @@ fun SpatialRenderer(
             view.childNodes.forEach { node ->
                 if (node is ModelNode) {
                     when (node.name) {
-                        ExecutiveAvatar.SHOSHI.id -> node.position = Position(shoshiX, shoshiY, shoshiZ)
-                        ExecutiveAvatar.LUNA.id -> node.position = Position(lunaX, lunaY, lunaZ)
+                        ExecutiveAvatar.SHOSHI.id -> {
+                            node.position = Position(shoshiX, shoshiY, shoshiZ)
+                            switchClip(node, animationClip(shoshiAnim), activeClips)
+                        }
+                        ExecutiveAvatar.LUNA.id -> {
+                            node.position = Position(lunaX, lunaY, lunaZ)
+                            switchClip(node, animationClip(lunaAnim), activeClips)
+                        }
                     }
                 }
             }
         }
     )
+}
+
+private fun animationClip(state: AnimationState): String = when (state) {
+    AnimationState.IDLE -> "Idle"
+    AnimationState.WALK -> "Walk"
+    AnimationState.TURN_LEFT -> "TurnLeft"
+    AnimationState.TURN_RIGHT -> "TurnRight"
+    AnimationState.SPEAK -> "Talk"
+    AnimationState.LISTEN -> "Listen"
+    AnimationState.GESTURE_EXECUTIVE -> "Present"
+}
+
+private fun switchClip(node: ModelNode, clip: String, active: MutableMap<String, String>) {
+    if (active[node.name] == clip) return
+    active[node.name]?.let(node::stopAnimation)
+    node.playAnimation(clip, loop = true)
+    active[node.name] = clip
 }
