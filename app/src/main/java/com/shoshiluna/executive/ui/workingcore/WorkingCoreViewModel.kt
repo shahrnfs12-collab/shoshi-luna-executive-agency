@@ -11,8 +11,11 @@ import com.shoshiluna.executive.core.agent.SovereignMemory
 import com.shoshiluna.executive.core.agent.SovereignMemoryVault
 import com.shoshiluna.executive.core.agent.MemoryPartition
 import com.shoshiluna.executive.core.business.EvidenceCategory
+import com.shoshiluna.executive.core.business.EvidenceRegistry
+import com.shoshiluna.executive.core.github.GitHubCredentialStore
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.AiConnectionState
+import com.shoshiluna.executive.core.network.ConnectorRegistry
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,7 +98,38 @@ class WorkingCoreViewModel(
         )
         activeRequest?.cancel()
         activeRequest = viewModelScope.launch {
-            when (val result = gateway.send(agent, clean)) {
+            val routedPrompt = if (isGitHubIntent(clean)) {
+                when (val githubContext = buildVerifiedGitHubContext(clean)) {
+                    is GitHubContext.Ready -> githubContext.prompt
+                    is GitHubContext.NotConfigured -> {
+                        val message = WorkingCoreMessage(
+                            agent = agent,
+                            fromUser = false,
+                            text = "GitHub עדיין לא מחובר באפליקציה. פתחי ‘חיבור GitHub’, הגדירי token והריפו פעם אחת, ואז אוכל לקרוא את המאגר וה-CI ישירות.",
+                            source = WorkingCoreMessageSource.COMMAND
+                        )
+                        _uiState.value = _uiState.value.copy(
+                            connection = AiConnectionState.CONNECTED,
+                            isSending = false,
+                            messages = _uiState.value.messages + message,
+                            error = null,
+                            speakMessageId = if (speakResponse) message.id else null
+                        )
+                        return@launch
+                    }
+                    is GitHubContext.Failed -> {
+                        _uiState.value = _uiState.value.copy(
+                            connection = AiConnectionState.ERROR,
+                            isSending = false,
+                            error = githubContext.message,
+                            speakMessageId = null
+                        )
+                        return@launch
+                    }
+                }
+            } else clean
+
+            when (val result = gateway.send(agent, routedPrompt)) {
                 is AiCallResult.Success -> {
                     val answer = WorkingCoreMessage(agent = agent, fromUser = false, text = result.text)
                     val partition = if (agent == ExecutiveAgent.SHOSHI) MemoryPartition.SHOSHI_PRIVATE else MemoryPartition.LUNA_PRIVATE
@@ -137,6 +171,51 @@ class WorkingCoreViewModel(
         }
     }
 
+    private suspend fun buildVerifiedGitHubContext(userPrompt: String): GitHubContext {
+        if (!GitHubCredentialStore.isConfigured()) return GitHubContext.NotConfigured
+        val repository = GitHubCredentialStore.repository() ?: return GitHubContext.NotConfigured
+        val correlationId = UUID.randomUUID().toString()
+        val response = runCatching {
+            ConnectorRegistry.callConnector("github", mapOf("operation" to "repo"))
+        }.getOrElse { error ->
+            return GitHubContext.Failed("GitHub connector failed: ${error.message ?: error.javaClass.simpleName}")
+        }
+        if (response.contains("\"ok\":false")) {
+            return GitHubContext.Failed("GitHub connection was reached but repository access failed. Open GitHub connection settings and run the real connection test again.")
+        }
+
+        EvidenceRegistry.record(
+            category = EvidenceCategory.VERIFIED_RESULT,
+            content = "Live GitHub repository access verified for $repository",
+            source = "GitHubConnector:repo",
+            correlationId = correlationId
+        )
+
+        val compactResponse = response.take(5000)
+        return GitHubContext.Ready(
+            """
+            VERIFIED TOOL CONTEXT — GITHUB LIVE ACCESS
+            Repository: $repository
+            Evidence correlation: $correlationId
+            A real GitHub API repository request succeeded immediately before this AI call.
+            You therefore HAVE live read access to this configured repository through the GitHub connector.
+            Do not claim that you lack GitHub access, clone access, repository visibility, or tool connectivity.
+            Use the verified repository context below when answering. For any write operation (branch, commit, PR, rerun), the GitHub connector requires the app's approval flow; never pretend a write happened unless the connector returns success and evidence exists.
+
+            LIVE REPOSITORY RESPONSE:
+            $compactResponse
+
+            ORIGINAL USER REQUEST:
+            $userPrompt
+            """.trimIndent()
+        )
+    }
+
+    private fun isGitHubIntent(text: String): Boolean {
+        val normalized = text.lowercase()
+        return listOf("github", "git hub", "גיטהאב", "גיט האב", "ריפו", "repository", "repo", "ci/cd", "workflow", "pull request", "commit", "branch").any { it in normalized }
+    }
+
     fun markSpoken(messageId: String) {
         if (_uiState.value.speakMessageId == messageId) {
             _uiState.value = _uiState.value.copy(speakMessageId = null)
@@ -148,5 +227,11 @@ class WorkingCoreViewModel(
     override fun onCleared() {
         activeRequest?.cancel()
         super.onCleared()
+    }
+
+    private sealed interface GitHubContext {
+        data class Ready(val prompt: String) : GitHubContext
+        data object NotConfigured : GitHubContext
+        data class Failed(val message: String) : GitHubContext
     }
 }
