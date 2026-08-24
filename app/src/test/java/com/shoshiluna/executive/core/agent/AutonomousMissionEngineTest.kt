@@ -18,5 +18,6 @@ class AutonomousMissionEngineTest {
         assertEquals(4, mission.workPlan.size)
         assertTrue(mission.workPlan.any { it.contains(ExecutiveAgent.SHOSHI.id) })
         assertTrue(mission.workPlan.any { it.contains(ExecutiveAgent.LUNA.id) })
+        assertEquals("COMPLETED", mission.workPlanProgress["1"])
     }
 }
