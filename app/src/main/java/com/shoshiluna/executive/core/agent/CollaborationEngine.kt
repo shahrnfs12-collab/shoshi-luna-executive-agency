@@ -11,6 +11,8 @@ import com.shoshiluna.executive.core.business.ArtifactFactory
 import com.shoshiluna.executive.core.business.ArtifactType
 import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.business.EvidenceRegistry
+import com.shoshiluna.executive.core.security.ApprovalRiskLevel
+import com.shoshiluna.executive.core.security.HumanApprovalGateway
 
 /**
  * Executive consultation workflow. No canned "success" responses.
@@ -102,6 +104,13 @@ object CollaborationEngine {
             )
             EmpireMissionControl.updatePlanStep(missionId, 3, "COMPLETED", "Auditable deliverable created")
             EmpireMissionControl.updatePlanStep(missionId, 4, "WAITING_APPROVAL", "Owner review required")
+            HumanApprovalGateway.requestApproval(
+                action = "אישור התוצר למשימה: $topic",
+                agentId = initiatorId,
+                risk = ApprovalRiskLevel.MEDIUM,
+                reason = "Executive deliverable ${artifact.id} is ready for owner review",
+                missionId = missionId
+            )
             SovereignMemoryVault.record(
                 SovereignMemory(
                     partition = MemoryPartition.MISSION_SCOPED,
