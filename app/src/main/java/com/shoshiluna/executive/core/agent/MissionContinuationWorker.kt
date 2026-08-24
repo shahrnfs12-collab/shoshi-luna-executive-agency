@@ -26,8 +26,18 @@ class MissionContinuationWorker(context: Context, params: WorkerParameters) : Co
         return runCatching {
             CollaborationEngine.runConsultation(missionId, initiatorId, targetId, topic)
         }.fold(
-            onSuccess = { Result.success() },
-            onFailure = { if (runAttemptCount < 3) Result.retry() else Result.failure() }
+            onSuccess = {
+                EmpireMissionControl.state.value.missions.firstOrNull { it.id == missionId }?.let { updated ->
+                    BackgroundMissionNotifications.show(applicationContext, updated.id, updated.title, updated.status)
+                }
+                Result.success()
+            },
+            onFailure = {
+                if (runAttemptCount < 3) Result.retry() else {
+                    BackgroundMissionNotifications.show(applicationContext, mission.id, mission.title, MissionStatus.FAILED)
+                    Result.failure()
+                }
+            }
         )
     }
 
