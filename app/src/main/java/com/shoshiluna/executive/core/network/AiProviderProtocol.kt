@@ -15,6 +15,17 @@ object AiProviderProtocols {
         require(model.isNotBlank() && authenticationHeader.matches(Regex("[A-Za-z0-9-]+")))
         return AiProviderProtocol(url.toString(), model.trim(), authenticationHeader, authenticationPrefix)
     }
+    fun local(endpoint: String, model: String): AiProviderProtocol {
+        val url = java.net.URI(endpoint.trim())
+        val loopbackHosts = setOf("localhost", "127.0.0.1", "::1", "10.0.2.2")
+        val secure = url.scheme == "https"
+        val localCleartext = url.scheme == "http" && url.host in loopbackHosts
+        require((secure || localCleartext) && !url.host.isNullOrBlank() && url.userInfo == null && url.fragment == null) {
+            "Local endpoint must use HTTPS, or HTTP on a loopback/emulator host"
+        }
+        require(model.isNotBlank())
+        return AiProviderProtocol(url.toString(), model.trim(), "Authorization", "Bearer ")
+    }
     fun forProvider(provider: AiProviderId): AiProviderProtocol = when (provider) {
         AiProviderId.OPENAI -> AiProviderProtocol(
             endpoint = "https://api.openai.com/v1/responses",
@@ -38,6 +49,7 @@ object AiProviderProtocols {
             authenticationHeader = "Authorization",
             authenticationPrefix = "Bearer "
         )
+        AiProviderId.LOCAL_OPENAI -> throw IllegalArgumentException("Local provider requires an explicit endpoint")
         AiProviderId.CUSTOM -> throw IllegalArgumentException("Custom provider requires an explicit endpoint")
     }
 }
