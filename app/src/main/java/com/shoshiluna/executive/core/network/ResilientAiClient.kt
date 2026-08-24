@@ -26,14 +26,14 @@ object ResilientAiClient {
                 }
                 is AiCallResult.Failure -> {
                     last = result
-                    if (!canFailOver(result)) return result
+                    if (!shouldFailOver(result)) return result
                 }
             }
         }
         return last ?: AiCallResult.Failure(AiConnectionState.ERROR, "No configured AI provider completed the request.")
     }
 
-    private fun canFailOver(failure: AiCallResult.Failure): Boolean =
+    internal fun shouldFailOver(failure: AiCallResult.Failure): Boolean =
         failure.state == AiConnectionState.OFFLINE ||
             failure.state == AiConnectionState.RATE_LIMITED ||
             (failure.httpCode?.let { it in 500..599 } == true)
