@@ -76,7 +76,7 @@ object OpenAiClient {
         val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message ->
             if (message.role == "user") message.content else "${message.role}: ${message.content}"
         }
-        val protocol = AiProviderProtocols.forProvider(provider)
+        val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
         val effectiveModel = if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
         val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input).toRequestBody(mediaType)
         val requestBuilder = Request.Builder()
