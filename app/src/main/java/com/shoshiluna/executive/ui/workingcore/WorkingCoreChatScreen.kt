@@ -160,7 +160,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
             if (ui.messages.isEmpty()) {
                 item {
                     Text(
-                        "בחרי SHOSHI או LUNA ושלחי שאלה חופשית. פקודות מפורשות כמו ‘צרי משימה בדיקת מערכת’, ‘משימות’ או ‘עצור הכל’ מבוצעות מקומית ומסומנות COMMAND.",
+                        "בחרי SHOSHI או LUNA. בקשה מפורשת כמו ‘תבנו לי תוכנית שיווק’ תיפתח כמשימה, תחולק בין שתיהן ותופיע במרכז השליטה. פקודות ‘משימות’, ‘סטטוס’ ו‘עצור הכל’ מבוצעות מקומית.",
                         color = Color.Gray
                     )
                 }
