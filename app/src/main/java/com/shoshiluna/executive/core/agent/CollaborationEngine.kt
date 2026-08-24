@@ -62,6 +62,7 @@ object CollaborationEngine {
             CommunicationBus.sendMessage(response)
 
             if (offline) {
+                EmpireMissionControl.updatePlanStep(missionId, 2, "WAITING", "AI provider unavailable")
                 EmpireMissionControl.transitionStatus(
                     missionId,
                     MissionStatus.WAITING_FOR_EXTERNAL_RESPONSE,
@@ -79,6 +80,7 @@ object CollaborationEngine {
                 finalOutput = reply
             )
             results[missionId] = result
+            EmpireMissionControl.updatePlanStep(missionId, 2, "COMPLETED", "Counterpart review completed")
             val artifact = ArtifactFactory.createArtifact(
                 type = ArtifactType.REPORT,
                 agentId = targetId,
@@ -92,6 +94,8 @@ object CollaborationEngine {
                 missionId = missionId,
                 correlationId = artifact.id
             )
+            EmpireMissionControl.updatePlanStep(missionId, 3, "COMPLETED", "Auditable deliverable created")
+            EmpireMissionControl.updatePlanStep(missionId, 4, "WAITING_APPROVAL", "Owner review required")
             SovereignMemoryVault.record(
                 SovereignMemory(
                     partition = MemoryPartition.MISSION_SCOPED,
