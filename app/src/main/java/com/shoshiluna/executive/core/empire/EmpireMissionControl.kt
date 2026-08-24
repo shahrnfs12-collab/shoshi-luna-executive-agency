@@ -28,7 +28,8 @@ data class EmpireMission(
     val requiredCondition: String? = null,
     val resumePolicy: String? = null,
     val correlationId: String? = null,
-    val taskDependencies: List<String> = emptyList()
+    val taskDependencies: List<String> = emptyList(),
+    val workPlan: List<String> = emptyList()
 )
 
 data class EmpireState(
@@ -85,6 +86,22 @@ object EmpireMissionControl {
         persist()
         audit(cleanOwner, mission.id, "MISSION_CREATED", "${mission.status}; environment=${mission.environment}")
         return mission
+    }
+
+    @Synchronized
+    fun attachPlan(missionId: String, workPlan: List<String>) {
+        require(workPlan.isNotEmpty()) { "Mission work plan is required" }
+        var found = false
+        _state.value = _state.value.copy(missions = _state.value.missions.map { mission ->
+            if (mission.id == missionId) {
+                found = true
+                check(mission.status == MissionStatus.CREATED) { "Plan can only be attached to a created mission" }
+                mission.copy(workPlan = workPlan.toList(), updatedAt = System.currentTimeMillis())
+            } else mission
+        })
+        require(found) { "Unknown missionId: $missionId" }
+        persist()
+        audit("SYSTEM", missionId, "MISSION_PLAN_ATTACHED", "steps=${workPlan.size}")
     }
 
     @Synchronized
