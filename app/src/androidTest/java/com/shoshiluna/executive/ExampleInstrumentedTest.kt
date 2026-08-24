@@ -10,7 +10,7 @@ import org.junit.runner.RunWith
 class ExampleInstrumentedTest {
     @Test
     fun applicationIdMatchesProductionPackage() {
-        val appContext = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals("com.shoshiluna.executive", appContext.packageName)
     }
 }
