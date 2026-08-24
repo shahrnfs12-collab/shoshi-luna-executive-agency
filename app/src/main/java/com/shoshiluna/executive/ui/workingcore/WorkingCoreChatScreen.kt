@@ -95,6 +95,16 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
         )
 
         ConnectionBanner(ui.connection, ui.error)
+        ui.routingLabel?.let { route ->
+            Surface(color = ChatGold.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "נתב המוחות • $route",
+                    color = ChatGold,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
 
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
