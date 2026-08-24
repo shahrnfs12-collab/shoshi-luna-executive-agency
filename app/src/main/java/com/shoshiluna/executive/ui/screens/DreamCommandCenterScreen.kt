@@ -418,14 +418,15 @@ private fun ExecutiveVisionCarousel(
                     }
                 }
             }
-            SafeRasterExecutive(
-                R.drawable.shoshi_cutout, "SHOSHI",
-                Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f)
+            CarouselExecutivePortrait(
+                name = "SHOSHI",
+                resourceId = R.drawable.shoshi_executive,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 86.dp).zIndex(2f)
             )
-            SafeRasterExecutive(
-                // Use the same LUNA asset already proven to decode in Chat and agent cards.
-                R.drawable.luna_executive, "LUNA",
-                Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f)
+            CarouselExecutivePortrait(
+                name = "LUNA",
+                resourceId = R.drawable.luna_executive,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 86.dp).zIndex(2f)
             )
             Button(
                 onClick = { onOpen(pagerState.currentPage) },
@@ -447,6 +448,34 @@ private fun ExecutiveVisionCarousel(
             }
         }
         Text("החליקי לצדדים לבחירת מסך", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun CarouselExecutivePortrait(name: String, resourceId: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .width(112.dp)
+            .height(260.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xEE08090C))
+            .border(1.5.dp, DreamGold.copy(alpha = 0.9f), RoundedCornerShape(22.dp))
+    ) {
+        SafeRasterExecutive(resourceId, name, Modifier.fillMaxSize(), ContentScale.Crop)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF0000000))))
+        )
+        Text(
+            name,
+            color = DreamGold,
+            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
+        )
     }
 }
 
