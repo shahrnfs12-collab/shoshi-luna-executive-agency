@@ -17,5 +17,6 @@ class AiProviderPayloadCodecTest {
         assertEquals("a", AiProviderPayloadCodec.decodeText(AiProviderId.ANTHROPIC, "{\"content\":[{\"type\":\"text\",\"text\":\"a\"}]}"))
         assertEquals("g", AiProviderPayloadCodec.decodeText(AiProviderId.GOOGLE_GEMINI, "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"g\"}]}}]}"))
         assertEquals("r", AiProviderPayloadCodec.decodeText(AiProviderId.OPENROUTER, "{\"choices\":[{\"message\":{\"content\":\"r\"}}]}"))
+        assertEquals("c", AiProviderPayloadCodec.decodeText(AiProviderId.CUSTOM, "{\"choices\":[{\"message\":{\"content\":\"c\"}}]}"))
     }
 }
