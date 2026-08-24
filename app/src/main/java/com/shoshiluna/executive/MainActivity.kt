@@ -9,13 +9,13 @@ import com.shoshiluna.executive.core.engine.TitanEngine
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Initialize ShoshiLuna Executive Engine
         TitanEngine.initialize(this)
-        
+
         enableEdgeToEdge()
         setContent {
-            ShoshiLunaApp()
+            ShoshiLunaAppWithVideo()
         }
     }
 }
