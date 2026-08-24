@@ -57,6 +57,8 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var keyStatus by remember { mutableStateOf<String?>(null) }
     var customEndpoint by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
+    var providerHealth by remember { mutableStateOf<Map<AiProviderId, String>>(emptyMap()) }
+    var testingAllProviders by remember { mutableStateOf(false) }
     var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
 
     fun beginListening() {
@@ -223,6 +225,37 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                             }
                         }
                     ) { Text("בדיקת חיבור אמיתית") }
+                    Button(
+                        enabled = ApiKeyManager.configuredProviders(context).isNotEmpty() && !testingAllProviders,
+                        onClick = {
+                            testingAllProviders = true
+                            providerHealth = emptyMap()
+                            scope.launch {
+                                val results = linkedMapOf<AiProviderId, String>()
+                                ApiKeyManager.configuredProviders(context).forEach { provider ->
+                                    results[provider] = "בודקת…"
+                                    providerHealth = results.toMap()
+                                    results[provider] = when (val result = OpenAiClient.getCompletionResult(
+                                        messages = listOf(ChatMessage("user", "Reply with exactly: OK")),
+                                        providerOverride = provider
+                                    )) {
+                                        is AiCallResult.Success -> "מחובר • התקבלה תשובה אמיתית"
+                                        is AiCallResult.Failure -> "${result.state} • ${result.safeMessage}"
+                                    }
+                                    providerHealth = results.toMap()
+                                }
+                                testingAllProviders = false
+                            }
+                        }
+                    ) { Text(if (testingAllProviders) "בודקת את כל המוחות…" else "בדיקת כל המוחות") }
+                    providerHealth.forEach { (provider, status) ->
+                        val connected = status.startsWith("מחובר")
+                        Text(
+                            "${provider.name}: $status",
+                            color = if (connected) Color(0xFF70E1A1) else ChatGold,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     Text(
                         "אפשר לגלול בתוך חלון ההגדרות עד לכפתורי השמירה והבדיקה.",
                         color = Color.Gray,
