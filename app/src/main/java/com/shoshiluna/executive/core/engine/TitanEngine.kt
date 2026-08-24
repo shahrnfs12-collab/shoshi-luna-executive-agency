@@ -11,6 +11,7 @@ import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
 import com.shoshiluna.executive.core.external.ExternalOperationJournal
 import com.shoshiluna.executive.core.external.GenericHttpsAgentAdapter
+import com.shoshiluna.executive.core.external.TrustedExternalAgentRegistry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +50,7 @@ object TitanEngine {
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
+        TrustedExternalAgentRegistry.initialize(context)
         ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
         // Core network + memory + controlled external-agent runtime are initialized from the application context.
     }
