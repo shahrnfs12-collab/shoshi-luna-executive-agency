@@ -1,5 +1,8 @@
 package com.shoshiluna.executive.core.fabric
 
+import android.content.Context
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -8,18 +11,46 @@ object ModelRegistry {
     private const val OPEN_POLICY_MAX_RATIO = 0.10
     private val _models = MutableStateFlow(seedModels().associateBy { it.id })
     val models = _models.asStateFlow()
+    @Volatile private var appContext: Context? = null
+    private val gson = Gson()
+
+    @Synchronized
+    fun initialize(context: Context) {
+        if (appContext != null) return
+        appContext = context.applicationContext
+        val prefs = context.getSharedPreferences("ai_model_registry_v1", Context.MODE_PRIVATE)
+        val raw = prefs.getString("models", null) ?: return
+        val type = object : TypeToken<List<ModelDescriptor>>() {}.type
+        val restored = runCatching { gson.fromJson<List<ModelDescriptor>>(raw, type) }
+        if (restored.isFailure) {
+            prefs.edit().putString("corrupt_models_backup", raw.take(200_000)).remove("models").commit()
+            return
+        }
+        val merged = seedModels().associateBy { it.id }.toMutableMap()
+        restored.getOrNull().orEmpty().take(MAX_MODELS).forEach { model ->
+            runCatching { applyValidated(merged, model) }
+        }
+        _models.value = merged.entries.take(MAX_MODELS).associate { it.key to it.value }
+    }
 
     @Synchronized
     fun upsert(model: ModelDescriptor) {
         val current = _models.value.toMutableMap()
-        require(model.id in current || current.size < MAX_MODELS) { "Registry capacity reached" }
-        if (model.contentPolicy == ContentPolicyProfile.OPEN_POLICY && current[model.id]?.contentPolicy != ContentPolicyProfile.OPEN_POLICY) {
-            val projectedOpen = current.values.count { it.contentPolicy == ContentPolicyProfile.OPEN_POLICY } + 1
-            val projectedSize = if (model.id in current) current.size else current.size + 1
-            require(projectedOpen.toDouble() / projectedSize <= OPEN_POLICY_MAX_RATIO) { "Open-policy pool may not exceed 10%" }
-        }
-        current[model.id] = model
+        applyValidated(current, model)
         _models.value = current.toMap()
+        persist()
+    }
+
+    @Synchronized
+    fun upsertAll(models: Collection<ModelDescriptor>): Int {
+        val current = _models.value.toMutableMap()
+        var accepted = 0
+        models.forEach { model ->
+            runCatching { applyValidated(current, model) }.onSuccess { accepted++ }
+        }
+        _models.value = current.toMap()
+        persist()
+        return accepted
     }
 
     fun get(id: String) = _models.value[id]
@@ -35,6 +66,21 @@ object ModelRegistry {
             metrics = metrics ?: existing.metrics,
             lastVerifiedAt = if (status == RegistryStatus.VERIFIED) now else existing.lastVerifiedAt
         ))
+    }
+
+    private fun applyValidated(current: MutableMap<String, ModelDescriptor>, model: ModelDescriptor) {
+        require(model.id in current || current.size < MAX_MODELS) { "Registry capacity reached" }
+        if (model.contentPolicy == ContentPolicyProfile.OPEN_POLICY && current[model.id]?.contentPolicy != ContentPolicyProfile.OPEN_POLICY) {
+            val projectedOpen = current.values.count { it.contentPolicy == ContentPolicyProfile.OPEN_POLICY } + 1
+            val projectedSize = if (model.id in current) current.size else current.size + 1
+            require(projectedOpen.toDouble() / projectedSize <= OPEN_POLICY_MAX_RATIO) { "Open-policy pool may not exceed 10%" }
+        }
+        current[model.id] = model
+    }
+
+    private fun persist() {
+        appContext?.getSharedPreferences("ai_model_registry_v1", Context.MODE_PRIVATE)?.edit()
+            ?.putString("models", gson.toJson(_models.value.values.toList()))?.apply()
     }
 
     private fun seedModels(): List<ModelDescriptor> {
