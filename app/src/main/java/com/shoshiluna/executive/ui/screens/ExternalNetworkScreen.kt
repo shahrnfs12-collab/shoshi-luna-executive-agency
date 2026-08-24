@@ -73,7 +73,20 @@ fun ExternalNetworkScreen() {
                     Text("${agent.protocol} • ${agent.trustStatus}", color = NetworkGold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (agent.trustStatus == ExternalTrustStatus.PENDING) {
-                            OutlinedButton(onClick = { TrustedExternalAgentRegistry.markTrusted(agent.id, null) }) { Text("Trust") }
+                            OutlinedButton(onClick = {
+                                scope.launch {
+                                    val result = ExternalAgentGateway.handshake(agent.id)
+                                    status = result.fold(
+                                        { handshake ->
+                                            runCatching {
+                                                TrustedExternalAgentRegistry.markTrusted(agent.id, handshake.proof)
+                                                "Handshake verified; ${agent.displayName} is now TRUSTED"
+                                            }.getOrElse { "Handshake response rejected: ${it.message}" }
+                                        },
+                                        { "Handshake failed; trust not granted: ${it.message}" }
+                                    )
+                                }
+                            }) { Text("Handshake + Trust") }
                         }
                         if (agent.trustStatus == ExternalTrustStatus.TRUSTED) {
                             OutlinedButton(onClick = {
