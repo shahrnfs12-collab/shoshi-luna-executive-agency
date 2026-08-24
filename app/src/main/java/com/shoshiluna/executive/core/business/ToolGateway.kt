@@ -28,6 +28,9 @@ object ToolGateway {
         toolRegistry.remove(toolId); adapters.remove(toolId)
     }
 
+    fun registeredTools(): List<ToolDefinition> = toolRegistry.values.sortedBy { it.name }
+    fun hasRuntimeAdapter(toolId: String): Boolean = adapters.containsKey(toolId)
+
     suspend fun executeTool(request: ToolRequest): ToolResult {
         resultCache[request.idempotencyKey]?.let { return it.copy(requestId = request.id) }
         if (EmpireMissionControl.state.value.emergencyHalt) return failed(request, "Emergency Halt Active")
