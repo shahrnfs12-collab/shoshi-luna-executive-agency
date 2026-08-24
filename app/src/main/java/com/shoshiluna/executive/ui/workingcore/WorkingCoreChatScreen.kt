@@ -53,6 +53,8 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var apiKeyInput by remember { mutableStateOf("") }
     var providerSelection by remember { mutableStateOf(ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI) }
     var keyStatus by remember { mutableStateOf<String?>(null) }
+    var customEndpoint by remember { mutableStateOf("") }
+    var customModel by remember { mutableStateOf("") }
     var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
 
     fun beginListening() {
@@ -133,7 +135,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text("בחרי ספק — הזיהוי האוטומטי יעדכן את הבחירה כשאפשר:", color = Color.LightGray)
-                    AiProviderId.entries.filter { it != AiProviderId.CUSTOM }.chunked(2).forEach { row ->
+                    AiProviderId.entries.chunked(2).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { provider ->
                                 FilterChip(
@@ -143,6 +145,10 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                                 )
                             }
                         }
+                    }
+                    if (providerSelection == AiProviderId.CUSTOM) {
+                        OutlinedTextField(customEndpoint, { customEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת HTTPS של OpenAI-compatible API") }, singleLine = true)
+                        OutlinedTextField(customModel, { customModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל") }, singleLine = true)
                     }
                     OutlinedTextField(
                         value = apiKeyInput,
@@ -161,9 +167,11 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                     keyStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            enabled = apiKeyInput.isNotBlank(),
+                            enabled = apiKeyInput.isNotBlank() && (providerSelection != AiProviderId.CUSTOM || (customEndpoint.isNotBlank() && customModel.isNotBlank())),
                             onClick = {
-                                ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
+                                if (providerSelection == AiProviderId.CUSTOM) {
+                                    ApiKeyManager.saveCustomProvider(context, apiKeyInput, customEndpoint, customModel)
+                                } else ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
                                 apiKeyInput = ""
                                 keyStatus = "נשמר מוצפן עבור ${providerSelection.name}; החיבור יאומת בבקשה הבאה"
                             }
