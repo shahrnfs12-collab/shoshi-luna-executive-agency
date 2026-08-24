@@ -27,7 +27,9 @@ object PublicCatalogDiscovery {
     }.getOrElse { DiscoveryResult("OPENROUTER_OFFICIAL_CATALOG", 0, 0, 1, it.message) }
 
     fun discoverHuggingFace(): DiscoveryResult = runCatching {
-        val body = execute("https://huggingface.co/api/models?sort=downloads&direction=-1&limit=500&full=true", null)
+        val remaining = (ModelRegistry.MAX_MODELS - ModelRegistry.all().size).coerceAtLeast(0)
+        if (remaining == 0) return DiscoveryResult("HUGGING_FACE_PUBLIC_HUB", 0, 0, 0)
+        val body = execute("https://huggingface.co/api/models?sort=downloads&direction=-1&limit=$remaining&full=true", null)
         val array = JsonParser.parseString(body).asJsonArray
         var accepted = 0; var failed = 0
         array.take(ModelRegistry.MAX_MODELS - ModelRegistry.all().size).forEach { element ->
