@@ -19,7 +19,7 @@ object AiProviderPayloadCodec {
                 if (!instructions.isNullOrBlank()) put("system_instruction", mapOf("parts" to listOf(mapOf("text" to instructions))))
                 put("contents", listOf(mapOf("role" to "user", "parts" to listOf(mapOf("text" to input)))))
             }
-            AiProviderId.OPENROUTER, AiProviderId.GROQ, AiProviderId.CUSTOM -> mapOf(
+            AiProviderId.OPENROUTER, AiProviderId.OPENROUTER_UNCENSORED, AiProviderId.GROQ, AiProviderId.CUSTOM -> mapOf(
                 "model" to model,
                 "messages" to buildList {
                     if (!instructions.isNullOrBlank()) add(mapOf("role" to "system", "content" to instructions))
@@ -40,7 +40,7 @@ object AiProviderPayloadCodec {
             AiProviderId.GOOGLE_GEMINI -> root.getAsJsonArray("candidates")?.firstOrNull()?.asJsonObject
                 ?.getAsJsonObject("content")?.getAsJsonArray("parts")?.mapNotNull { it.asJsonObject.get("text")?.asString }
                 ?.joinToString("\n").orEmpty()
-            AiProviderId.OPENROUTER, AiProviderId.GROQ, AiProviderId.CUSTOM -> root.getAsJsonArray("choices")?.firstOrNull()?.asJsonObject
+            AiProviderId.OPENROUTER, AiProviderId.OPENROUTER_UNCENSORED, AiProviderId.GROQ, AiProviderId.CUSTOM -> root.getAsJsonArray("choices")?.firstOrNull()?.asJsonObject
                 ?.getAsJsonObject("message")?.get("content")?.asString.orEmpty()
         }.trim()
     }
