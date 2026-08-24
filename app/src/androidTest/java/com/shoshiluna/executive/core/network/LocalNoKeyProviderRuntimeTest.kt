@@ -17,7 +17,7 @@ class LocalNoKeyProviderRuntimeTest {
         try {
             ApiKeyManager.saveLocalProvider(
                 context,
-                "http://10.0.2.2:11434/v1/chat/completions",
+                "https://local-ai.example/v1/chat/completions",
                 "llama3.2"
             )
 
