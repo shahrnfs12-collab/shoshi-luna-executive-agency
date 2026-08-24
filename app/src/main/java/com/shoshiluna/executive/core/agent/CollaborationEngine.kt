@@ -49,7 +49,7 @@ object CollaborationEngine {
 
             val memory = SovereignMemoryVault.getMissionMemory(missionId) +
                 SovereignMemoryVault.getPartition(MemoryPartition.EXECUTIVE_SHARED, targetId)
-            val council = AgencyBrainCouncil.execute(topic, memory, missionId)
+            val council = AgencyBrainCouncil.execute(topic, memory.map { it.content }, missionId)
             val aiResult = council.finalResult
             val reply = when (aiResult) {
                 is com.shoshiluna.executive.core.network.AiCallResult.Success -> aiResult.text
