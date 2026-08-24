@@ -63,6 +63,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var input by remember { mutableStateOf("") }
     var apiKeyInput by remember { mutableStateOf("") }
     var providerSelection by remember { mutableStateOf(ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI) }
+    var requiresProviderSelection by remember { mutableStateOf(false) }
     var keyStatus by remember { mutableStateOf<String?>(null) }
     var customEndpoint by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
@@ -183,9 +184,9 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         TextButton(onClick = { showApiSettings = false }) { Text("סגירה") }
                     }
                     Text(
-                        ApiKeyManager.configuredProviders(context).takeIf { it.isNotEmpty() }
-                            ?.joinToString(prefix = "מפתחות שמורים ומוצפנים: ") { it.name }
-                            ?: "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
+                        if (ApiKeyManager.configuredProviders(context).isNotEmpty())
+                            "קיימים ${ApiKeyManager.configuredProviders(context).size} חיבורים מוצפנים. פרטי המפתחות מוסתרים."
+                        else "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
                         color = Color.LightGray
                     )
                     Text(
@@ -193,15 +194,17 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         color = Color.Gray,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Text("בחרי ספק — הזיהוי האוטומטי יעדכן את הבחירה כשאפשר:", color = Color.LightGray)
-                    AiProviderId.entries.chunked(2).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { provider ->
-                                FilterChip(
-                                    selected = providerSelection == provider,
-                                    onClick = { providerSelection = provider; keyStatus = null },
-                                    label = { Text(provider.name) }
-                                )
+                    if (requiresProviderSelection) {
+                        Text("סוג המפתח אינו חד־משמעי. בחרי את הספק פעם אחת:", color = Color.LightGray)
+                        AiProviderId.entries.chunked(2).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { provider ->
+                                    FilterChip(
+                                        selected = providerSelection == provider,
+                                        onClick = { providerSelection = provider; requiresProviderSelection = false; keyStatus = "הספק שויך" },
+                                        label = { Text(provider.name) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -215,6 +218,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                             apiKeyInput = value
                             keyStatus = runCatching { AiProviderRegistry.detect(value) }.getOrNull()?.let { detected ->
                                 detected.provider?.also { providerSelection = it }
+                                requiresProviderSelection = detected.requiresUserSelection
                                 if (detected.requiresUserSelection) "לא ניתן לזהות בוודאות — בחרי ספק" else "זוהה: ${detected.provider?.name}"
                             }
                         },
@@ -232,7 +236,17 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                                     ApiKeyManager.saveCustomProvider(context, apiKeyInput, customEndpoint, customModel)
                                 } else ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
                                 apiKeyInput = ""
-                                keyStatus = "נשמר מוצפן עבור ${providerSelection.name}; החיבור יאומת בבקשה הבאה"
+                                val savedProvider = providerSelection
+                                keyStatus = "נשמר מוצפן. מבצעת בדיקת חיבור אמיתית…"
+                                scope.launch {
+                                    keyStatus = when (val result = OpenAiClient.getCompletionResult(
+                                        messages = listOf(ChatMessage("user", "Reply with exactly: OK")),
+                                        providerOverride = savedProvider
+                                    )) {
+                                        is AiCallResult.Success -> "המפתח הוצפן והחיבור עבר בדיקה חיה"
+                                        is AiCallResult.Failure -> "המפתח הוצפן, אך החיבור נכשל: ${result.safeMessage}"
+                                    }
+                                }
                             }
                         ) { Text("שמור מוצפן") }
                         OutlinedButton(onClick = {
@@ -279,13 +293,9 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                             }
                         }
                     ) { Text(if (testingAllProviders) "בודקת את כל המוחות…" else "בדיקת כל המוחות") }
-                    providerHealth.forEach { (provider, status) ->
-                        val connected = status.startsWith("מחובר")
-                        Text(
-                            "${provider.name}: $status",
-                            color = if (connected) Color(0xFF70E1A1) else ChatGold,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                    if (providerHealth.isNotEmpty() && !testingAllProviders) {
+                        val passed = providerHealth.values.count { it.startsWith("מחובר") }
+                        Text("תוצאת בדיקה: $passed מתוך ${providerHealth.size} חיבורים עובדים בפועל", color = if (passed == providerHealth.size) Color(0xFF70E1A1) else ChatGold)
                     }
                     Text(
                         "אפשר לגלול בתוך חלון ההגדרות עד לכפתורי השמירה והבדיקה.",
