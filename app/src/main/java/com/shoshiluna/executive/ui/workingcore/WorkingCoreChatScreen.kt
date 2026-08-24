@@ -1,5 +1,7 @@
 package com.shoshiluna.executive.ui.workingcore
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -10,6 +12,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
@@ -26,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shoshiluna.executive.R
 import com.shoshiluna.executive.core.agent.ExecutiveAgent
+import com.shoshiluna.executive.core.attachments.AttachmentInspection
+import com.shoshiluna.executive.core.attachments.ChatAttachment
+import com.shoshiluna.executive.core.attachments.SafeAttachmentInspector
 import com.shoshiluna.executive.core.network.AiConnectionState
 import com.shoshiluna.executive.core.network.AiProviderId
 import com.shoshiluna.executive.core.network.AiProviderRegistry
@@ -39,7 +46,9 @@ import com.shoshiluna.executive.core.voice.AudioPermissionState
 import com.shoshiluna.executive.core.voice.SttState
 import com.shoshiluna.executive.core.voice.rememberAudioPermissionFlow
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val ChatGold = Color(0xFFD8B45A)
 private val ChatPanel = Color(0xFF111111)
@@ -60,6 +69,28 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var providerHealth by remember { mutableStateOf<Map<AiProviderId, String>>(emptyMap()) }
     var testingAllProviders by remember { mutableStateOf(false) }
     var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
+    var attachments by remember { mutableStateOf<List<ChatAttachment>>(emptyList()) }
+    var attachmentStatus by remember { mutableStateOf<String?>(null) }
+    val attachmentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        scope.launch {
+            val availableSlots = (SafeAttachmentInspector.MAX_FILES - attachments.size).coerceAtLeast(0)
+            val selected = uris.take(availableSlots)
+            val results = withContext(Dispatchers.IO) {
+                selected.map { uri -> SafeAttachmentInspector.inspect(context.contentResolver, uri) }
+            }
+            val accepted = results.filterIsInstance<AttachmentInspection.Accepted>().map { it.attachment }
+            attachments = (attachments + accepted).distinctBy { it.uri }.take(SafeAttachmentInspector.MAX_FILES)
+            val rejected = results.filterIsInstance<AttachmentInspection.Rejected>()
+            attachmentStatus = when {
+                rejected.isNotEmpty() -> rejected.joinToString(" • ") { it.reason }
+                accepted.isNotEmpty() -> "${accepted.size} קבצים נבדקו ומוכנים לצירוף"
+                uris.isNotEmpty() && availableSlots == 0 -> "אפשר לצרף עד ${SafeAttachmentInspector.MAX_FILES} קבצים"
+                else -> null
+            }
+        }
+    }
 
     fun beginListening() {
         VoiceEngine.stopSpeech()
@@ -296,6 +327,27 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
             Text(status, color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
 
+        if (attachments.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                attachments.forEach { attachment ->
+                    InputChip(
+                        selected = true,
+                        onClick = {},
+                        label = { Text("${attachment.displayName} • ${attachment.summary}", maxLines = 1) },
+                        trailingIcon = {
+                            IconButton(onClick = { attachments = attachments - attachment }) {
+                                Icon(Icons.Default.Close, contentDescription = "הסרת קובץ")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+        attachmentStatus?.let { status ->
+            Text(status, color = ChatGold, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+
         Row(
             Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -309,6 +361,10 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 enabled = !ui.isSending,
                 maxLines = 4
             )
+            IconButton(
+                enabled = !ui.isSending && attachments.size < SafeAttachmentInspector.MAX_FILES,
+                onClick = { attachmentPicker.launch(arrayOf("*/*")) }
+            ) { Icon(Icons.Default.AttachFile, contentDescription = "צירוף תמונה או קובץ") }
             IconButton(
                 enabled = !ui.isSending,
                 onClick = {
@@ -325,10 +381,12 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, contentDescription = "Voice")
             }
             IconButton(
-                enabled = input.isNotBlank() && !ui.isSending,
+                enabled = (input.isNotBlank() || attachments.isNotEmpty()) && !ui.isSending,
                 onClick = {
-                    vm.send(input, speakResponse = false)
+                    vm.send(input.ifBlank { "נתחי את הקבצים המצורפים" }, attachments, speakResponse = false)
                     input = ""
+                    attachments = emptyList()
+                    attachmentStatus = null
                 }
             ) { Icon(Icons.Default.Send, contentDescription = "Send") }
         }
