@@ -17,11 +17,8 @@ object AiProviderProtocols {
     }
     fun local(endpoint: String, model: String): AiProviderProtocol {
         val url = java.net.URI(endpoint.trim())
-        val loopbackHosts = setOf("localhost", "127.0.0.1", "::1", "10.0.2.2")
-        val secure = url.scheme == "https"
-        val localCleartext = url.scheme == "http" && url.host in loopbackHosts
-        require((secure || localCleartext) && !url.host.isNullOrBlank() && url.userInfo == null && url.fragment == null) {
-            "Local endpoint must use HTTPS, or HTTP on a loopback/emulator host"
+        require(url.scheme == "https" && !url.host.isNullOrBlank() && url.userInfo == null && url.fragment == null) {
+            "Local endpoint must be a clean HTTPS URL"
         }
         require(model.isNotBlank())
         return AiProviderProtocol(url.toString(), model.trim(), "Authorization", "Bearer ")
