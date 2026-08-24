@@ -181,14 +181,14 @@ fun DreamCommandCenterScreen() {
             DreamGlassCard("EXECUTIVE BRIEF • NOW") {
                 Text(brief.headline, color = Color.White, fontWeight = FontWeight.Bold)
                 if (brief.priorities.isNotEmpty()) {
-                    Text("Priorities", color = DreamGold, style = MaterialTheme.typography.labelLarge)
+                    Text("סדרי עדיפות", color = DreamGold, style = MaterialTheme.typography.labelLarge)
                     brief.priorities.forEach { Text("• $it", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
                 }
                 if (brief.risks.isNotEmpty()) {
-                    Text("Risks / Blocks", color = DreamAmber, style = MaterialTheme.typography.labelLarge)
+                    Text("סיכונים וחסמים", color = DreamAmber, style = MaterialTheme.typography.labelLarge)
                     brief.risks.forEach { Text("• $it", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
                 }
-                Text("Next best action", color = DreamGold, style = MaterialTheme.typography.labelLarge)
+                Text("הפעולה הבאה המומלצת", color = DreamGold, style = MaterialTheme.typography.labelLarge)
                 Text(brief.nextBestAction, color = DreamGreen, fontWeight = FontWeight.SemiBold)
             }
         }
@@ -271,10 +271,10 @@ fun DreamCommandCenterScreen() {
 
         item {
             DreamGlassCard("TRUST & EVIDENCE") {
-                Text("Every external action, sensitive decision and verified result must leave an evidence/audit trail.", color = Color.LightGray)
+                Text("כל פעולה חיצונית, החלטה רגישה ותוצאה מאומתת חייבות להישמר בשרשרת הראיות.", color = Color.LightGray)
                 Spacer(Modifier.height(8.dp))
                 val recent = remember(evidence.size, empire.missions.size, approvals.size) { AuditTrail.recent(5) }
-                if (recent.isEmpty()) Text("No audit events yet.", color = Color.Gray)
+                if (recent.isEmpty()) Text("אין עדיין אירועי ביקורת.", color = Color.Gray)
                 recent.forEach { audit ->
                     Text("• ${audit.action} → ${audit.result}", color = Color.White, style = MaterialTheme.typography.bodySmall)
                 }
@@ -337,7 +337,7 @@ fun DreamCommandCenterScreen() {
                 ) {
                     Icon(if (empire.emergencyHalt) Icons.Default.PlayArrow else Icons.Default.StopCircle, null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (empire.emergencyHalt) "RELEASE HALT" else "EMERGENCY HALT")
+                    Text(if (empire.emergencyHalt) "שחרור עצירה" else "עצירת חירום")
                 }
             }
         }
