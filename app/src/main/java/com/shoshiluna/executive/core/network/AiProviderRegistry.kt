@@ -5,6 +5,7 @@ enum class AiProviderId {
     ANTHROPIC,
     GOOGLE_GEMINI,
     OPENROUTER,
+    GROQ,
     CUSTOM
 }
 
@@ -30,6 +31,7 @@ object AiProviderRegistry {
             secret.startsWith("sk-ant-") -> detected(AiProviderId.ANTHROPIC, "Anthropic key prefix")
             secret.startsWith("AIza") -> detected(AiProviderId.GOOGLE_GEMINI, "Google API key prefix")
             secret.startsWith("sk-or-") -> detected(AiProviderId.OPENROUTER, "OpenRouter key prefix")
+            secret.startsWith("gsk_") -> detected(AiProviderId.GROQ, "Groq key prefix")
             secret.startsWith("sk-proj-") -> detected(AiProviderId.OPENAI, "OpenAI project key prefix")
             secret.startsWith("sk-") -> DetectedAiProvider(
                 provider = null,
