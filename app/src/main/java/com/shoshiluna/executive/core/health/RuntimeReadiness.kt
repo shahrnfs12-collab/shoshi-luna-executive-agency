@@ -18,7 +18,8 @@ object RuntimeReadiness {
         val models = Avatar3DAssets.readiness(context)
         val aiState = CapabilityRegistry.get("ai")
         val aiVerified = aiState.status == CapabilityStatus.READY
-        val hasCredential = ApiKeyManager.hasOpenAiKey(context)
+        val configuredProviders = ApiKeyManager.configuredProviders(context)
+        val hasCredential = configuredProviders.isNotEmpty()
         return RuntimeReadinessReport(
             listOf(
                 ReadinessItem("Core Android runtime", true, "App shell, mission control and local memory are packaged"),
@@ -27,7 +28,7 @@ object RuntimeReadiness {
                     aiVerified,
                     when {
                         aiVerified -> aiState.detail
-                        hasCredential -> "Credential stored; live provider verification has not passed"
+                        hasCredential -> "Stored: ${configuredProviders.joinToString { it.name }}; live verification has not passed"
                         else -> "No AI provider credential configured"
                     }
                 ),
