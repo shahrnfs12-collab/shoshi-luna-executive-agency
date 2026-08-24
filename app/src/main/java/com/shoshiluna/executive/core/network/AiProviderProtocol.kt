@@ -34,7 +34,13 @@ object AiProviderProtocols {
         )
         AiProviderId.OPENROUTER -> AiProviderProtocol(
             endpoint = "https://openrouter.ai/api/v1/chat/completions",
-            defaultModel = "openai/gpt-5.6-luna",
+            defaultModel = "openrouter/free",
+            authenticationHeader = "Authorization",
+            authenticationPrefix = "Bearer "
+        )
+        AiProviderId.GROQ -> AiProviderProtocol(
+            endpoint = "https://api.groq.com/openai/v1/chat/completions",
+            defaultModel = "openai/gpt-oss-120b",
             authenticationHeader = "Authorization",
             authenticationPrefix = "Bearer "
         )
