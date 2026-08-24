@@ -18,10 +18,12 @@ object PublicCatalogDiscovery {
         SecureCredentialBroker.withCredential(context, SecureCredentialBroker.reference(AiProviderId.OPENROUTER)) { key ->
             val body = execute("https://openrouter.ai/api/v1/models", "Bearer $key")
             val array = JsonParser.parseString(body).asJsonObject.getAsJsonArray("data")
-            var accepted = 0; var failed = 0
+            val discoveredModels = mutableListOf<ModelDescriptor>(); var failed = 0
             array.take(ModelRegistry.MAX_MODELS - ModelRegistry.all().size).forEach { element ->
-                runCatching { ModelRegistry.upsert(openRouterModel(element.asJsonObject, body)); accepted++ }.onFailure { failed++ }
+                runCatching { discoveredModels += openRouterModel(element.asJsonObject, body) }.onFailure { failed++ }
             }
+            val accepted = ModelRegistry.upsertAll(discoveredModels)
+            failed += discoveredModels.size - accepted
             DiscoveryResult("OPENROUTER_OFFICIAL_CATALOG", array.size(), accepted, failed)
         }
     }.getOrElse { DiscoveryResult("OPENROUTER_OFFICIAL_CATALOG", 0, 0, 1, it.message) }
@@ -31,10 +33,12 @@ object PublicCatalogDiscovery {
         if (remaining == 0) return DiscoveryResult("HUGGING_FACE_PUBLIC_HUB", 0, 0, 0)
         val body = execute("https://huggingface.co/api/models?sort=downloads&direction=-1&limit=$remaining&full=true", null)
         val array = JsonParser.parseString(body).asJsonArray
-        var accepted = 0; var failed = 0
+        val discoveredModels = mutableListOf<ModelDescriptor>(); var failed = 0
         array.take(ModelRegistry.MAX_MODELS - ModelRegistry.all().size).forEach { element ->
-            runCatching { ModelRegistry.upsert(huggingFaceModel(element.asJsonObject, body)); accepted++ }.onFailure { failed++ }
+            runCatching { discoveredModels += huggingFaceModel(element.asJsonObject, body) }.onFailure { failed++ }
         }
+        val accepted = ModelRegistry.upsertAll(discoveredModels)
+        failed += discoveredModels.size - accepted
         DiscoveryResult("HUGGING_FACE_PUBLIC_HUB", array.size(), accepted, failed)
     }.getOrElse { DiscoveryResult("HUGGING_FACE_PUBLIC_HUB", 0, 0, 1, it.message) }
 
