@@ -26,7 +26,9 @@ object ResilientAiClient {
         val active = ApiKeyManager.activeProvider(context)
         val ordered = buildList {
             // Respect an explicit custom or uncensored selection first; otherwise prefer legal free-tier routes.
-            if (active in setOf(AiProviderId.CUSTOM, AiProviderId.OPENROUTER_UNCENSORED) && active in configured) add(active!!)
+            if (active != null && active in setOf(AiProviderId.CUSTOM, AiProviderId.OPENROUTER_UNCENSORED) && active in configured) {
+                add(active)
+            }
             addAll(freeFirstPriority.filter { it in configured && it !in this })
         }
 
