@@ -57,14 +57,15 @@ object OpenAiClient {
 
     suspend fun getCompletionResult(
         messages: List<ChatMessage>,
-        model: String = DEFAULT_MODEL
+        model: String = DEFAULT_MODEL,
+        providerOverride: AiProviderId? = null
     ): AiCallResult = withContext(Dispatchers.IO) {
         val context = appContext ?: return@withContext fail(
             AiConnectionState.OFFLINE,
             "AI runtime is not initialized."
         )
 
-        val provider = ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
+        val provider = providerOverride ?: ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
         val apiKey = ApiKeyManager.getProviderKey(context, provider)
         if (apiKey.isNullOrBlank()) {
             return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
