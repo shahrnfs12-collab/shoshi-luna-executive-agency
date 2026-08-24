@@ -123,7 +123,7 @@ class WorkingCoreViewModel(
                         isSending = false,
                         messages = _uiState.value.messages + answer,
                         error = null,
-                        routingLabel = listOfNotNull(result.taskProfile?.name, result.provider?.name).joinToString(" • ").ifBlank { null },
+                        routingLabel = listOfNotNull(result.taskProfile?.name, result.provider?.name, result.model).joinToString(" • ").ifBlank { null },
                         speakMessageId = if (speakResponse) answer.id else null
                     )
                 }
