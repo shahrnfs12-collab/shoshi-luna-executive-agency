@@ -373,7 +373,7 @@ private fun ExecutiveVisionCarousel(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(610.dp)
+                .height(740.dp)
                 .clip(RoundedCornerShape(34.dp))
                 .background(Brush.radialGradient(listOf(Color(0x55351E06), Color.Black)))
         ) {
@@ -421,12 +421,12 @@ private fun ExecutiveVisionCarousel(
             CarouselExecutivePortrait(
                 name = "SHOSHI",
                 resourceId = R.drawable.shoshi_executive,
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 86.dp).zIndex(2f)
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp, bottom = 82.dp).zIndex(2f)
             )
             CarouselExecutivePortrait(
                 name = "LUNA",
                 resourceId = R.drawable.luna_executive,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 86.dp).zIndex(2f)
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 82.dp).zIndex(2f)
             )
             Button(
                 onClick = { onOpen(pagerState.currentPage) },
@@ -456,7 +456,7 @@ private fun CarouselExecutivePortrait(name: String, resourceId: Int, modifier: M
     Box(
         modifier
             .width(112.dp)
-            .height(260.dp)
+            .height(225.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(Color(0xEE08090C))
             .border(1.5.dp, DreamGold.copy(alpha = 0.9f), RoundedCornerShape(22.dp))
