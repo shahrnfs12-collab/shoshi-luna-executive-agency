@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import io.github.sceneview.SceneView
@@ -27,6 +29,12 @@ fun SpatialRenderer(
 ) {
     val shoshiPos by DigitalHumanController.shoshiPosition.collectAsState()
     val lunaPos by DigitalHumanController.lunaPosition.collectAsState()
+    val shoshiX by animateFloatAsState(shoshiPos.x, tween(1400), label = "shoshi-x")
+    val shoshiY by animateFloatAsState(shoshiPos.y, tween(1400), label = "shoshi-y")
+    val shoshiZ by animateFloatAsState(shoshiPos.z, tween(1400), label = "shoshi-z")
+    val lunaX by animateFloatAsState(lunaPos.x, tween(1400), label = "luna-x")
+    val lunaY by animateFloatAsState(lunaPos.y, tween(1400), label = "luna-y")
+    val lunaZ by animateFloatAsState(lunaPos.z, tween(1400), label = "luna-z")
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
@@ -35,9 +43,10 @@ fun SpatialRenderer(
                 shoshiModelPath?.let { path ->
                     runCatching {
                         val instance = modelLoader.createModelInstance(path)
-                        ModelNode(instance).also { node ->
+                        ModelNode(modelInstance = instance, scaleToUnits = 1.7f, autoAnimate = true).also { node ->
                             node.name = ExecutiveAvatar.SHOSHI.id
-                            node.position = Position(shoshiPos.x, shoshiPos.y, shoshiPos.z)
+                            node.position = Position(shoshiX, shoshiY, shoshiZ)
+                            node.isEditable = true
                             addChildNode(node)
                         }
                     }
@@ -46,9 +55,10 @@ fun SpatialRenderer(
                 lunaModelPath?.let { path ->
                     runCatching {
                         val instance = modelLoader.createModelInstance(path)
-                        ModelNode(instance).also { node ->
+                        ModelNode(modelInstance = instance, scaleToUnits = 1.7f, autoAnimate = true).also { node ->
                             node.name = ExecutiveAvatar.LUNA.id
-                            node.position = Position(lunaPos.x, lunaPos.y, lunaPos.z)
+                            node.position = Position(lunaX, lunaY, lunaZ)
+                            node.isEditable = true
                             addChildNode(node)
                         }
                     }
@@ -59,8 +69,8 @@ fun SpatialRenderer(
             view.childNodes.forEach { node ->
                 if (node is ModelNode) {
                     when (node.name) {
-                        ExecutiveAvatar.SHOSHI.id -> node.position = Position(shoshiPos.x, shoshiPos.y, shoshiPos.z)
-                        ExecutiveAvatar.LUNA.id -> node.position = Position(lunaPos.x, lunaPos.y, lunaPos.z)
+                        ExecutiveAvatar.SHOSHI.id -> node.position = Position(shoshiX, shoshiY, shoshiZ)
+                        ExecutiveAvatar.LUNA.id -> node.position = Position(lunaX, lunaY, lunaZ)
                     }
                 }
             }
