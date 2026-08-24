@@ -17,7 +17,7 @@ object ResilientAiClient {
         taskProfile: AiTaskProfile = AiTaskRouter.classify(messages.lastOrNull { it.role == "user" }?.content.orEmpty())
     ): AiCallResult {
         val configured = ApiKeyManager.configuredProviders(context)
-        if (configured.isEmpty()) return AiCallResult.Failure(AiConnectionState.API_KEY_MISSING, "No AI provider key is configured.")
+        if (configured.isEmpty()) return AiCallResult.Failure(AiConnectionState.API_KEY_MISSING, "No AI provider or local engine is configured.")
         val providerIds = configured.map { it.fabricId }.toSet()
         ModelRegistry.all().filter { it.providerId in providerIds && it.status in setOf(RegistryStatus.DISCOVERED, RegistryStatus.DOCUMENTED) }
             .forEach { ModelRegistry.transition(it.id, RegistryStatus.CONFIGURED) }
@@ -58,6 +58,7 @@ object ResilientAiClient {
         AiProviderId.ANTHROPIC -> "anthropic"
         AiProviderId.GOOGLE_GEMINI -> "google_gemini"
         AiProviderId.OPENROUTER -> "openrouter"
+        AiProviderId.LOCAL_OPENAI -> "local"
         AiProviderId.CUSTOM -> "custom"
     }
 }
