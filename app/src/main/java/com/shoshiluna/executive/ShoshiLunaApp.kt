@@ -202,18 +202,15 @@ private fun MissionsScreen() {
             ElevatedCard(Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(title, { title = it }, label = { Text("מטרה / משימה") }, modifier = Modifier.fillMaxWidth())
+                    Text("שושי ולונה יחלקו את העבודה ביניהן, ימשיכו ברקע ויבקשו אישור לפני סיום או פעולה רגישה.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(owner == ExecutiveAgent.SHOSHI, { owner = ExecutiveAgent.SHOSHI }, label = { Text("SHOSHI") })
                         FilterChip(owner == ExecutiveAgent.LUNA, { owner = ExecutiveAgent.LUNA }, label = { Text("LUNA") })
                     }
                     Button(enabled = !state.emergencyHalt && title.isNotBlank(), onClick = { 
-                        val mission = EmpireMissionControl.createMission(title, owner.id)
-                        AgencyOrchestrator.startPipeline(mission.id)
-                        if (title.contains("שיתוף", ignoreCase = true) || title.contains("joint", ignoreCase = true)) {
-                            CollaborationEngine.startConsultation(mission.id, ExecutiveAgent.SHOSHI.id, ExecutiveAgent.LUNA.id, title)
-                        }
+                        AutonomousMissionEngine.submitGoal(title, owner)
                         title = "" 
-                    }) { Text("צור משימה") }
+                    }) { Text("התחילי משימה אוטונומית") }
                 }
             }
         }
