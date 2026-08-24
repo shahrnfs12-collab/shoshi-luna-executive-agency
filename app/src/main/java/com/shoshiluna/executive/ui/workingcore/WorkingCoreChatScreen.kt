@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Send
@@ -121,8 +123,22 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 colors = CardDefaults.elevatedCardColors(containerColor = ChatPanel)
             ) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("חיבור ספקי AI", color = ChatGold, fontWeight = FontWeight.Bold)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 430.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("חיבור ספקי AI", color = ChatGold, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { showApiSettings = false }) { Text("סגירה") }
+                    }
                     Text(
                         ApiKeyManager.configuredProviders(context).takeIf { it.isNotEmpty() }
                             ?.joinToString(prefix = "מפתחות שמורים ומוצפנים: ") { it.name }
@@ -197,6 +213,11 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                             }
                         }
                     ) { Text("בדיקת חיבור אמיתית") }
+                    Text(
+                        "אפשר לגלול בתוך חלון ההגדרות עד לכפתורי השמירה והבדיקה.",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         } else {
