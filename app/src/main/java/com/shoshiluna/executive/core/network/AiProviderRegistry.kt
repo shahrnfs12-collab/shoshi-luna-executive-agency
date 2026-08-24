@@ -5,6 +5,7 @@ enum class AiProviderId {
     ANTHROPIC,
     GOOGLE_GEMINI,
     OPENROUTER,
+    LOCAL_OPENAI,
     CUSTOM
 }
 
