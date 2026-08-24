@@ -41,21 +41,29 @@ object TitanEngine {
 
     private val _systemStatus = MutableStateFlow("HEALTHY")
     val systemStatus = _systemStatus.asStateFlow()
+    private val _initializationFailures = MutableStateFlow<Map<String, String>>(emptyMap())
+    val initializationFailures = _initializationFailures.asStateFlow()
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
-        EmpireMissionControl.initialize(context)
-        ArtifactFactory.initialize(context)
-        EvolutionEngine.initialize(context)
-        HumanApprovalGateway.initialize(context)
-        AgencyBrainCouncil.initialize(context)
-        AgencyGrowthAutopilot.initialize(context)
-        BuiltInToolBootstrap.initialize()
-        SovereignMemoryVault.initialize(context)
-        OpenAiClient.initialize(context)
-        ExternalOperationJournal.initialize(context)
-        TrustedExternalAgentRegistry.initialize(context)
-        ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
+        val failures = linkedMapOf<String, String>()
+        fun boot(name: String, block: () -> Unit) {
+            runCatching(block).onFailure { failures[name] = it::class.java.simpleName }
+        }
+        boot("missions") { EmpireMissionControl.initialize(context) }
+        boot("artifacts") { ArtifactFactory.initialize(context) }
+        boot("evolution") { EvolutionEngine.initialize(context) }
+        boot("approvals") { HumanApprovalGateway.initialize(context) }
+        boot("brain_council") { AgencyBrainCouncil.initialize(context) }
+        boot("growth_fund") { AgencyGrowthAutopilot.initialize(context) }
+        boot("tools") { BuiltInToolBootstrap.initialize() }
+        boot("memory") { SovereignMemoryVault.initialize(context) }
+        boot("ai_network") { OpenAiClient.initialize(context) }
+        boot("external_journal") { ExternalOperationJournal.initialize(context) }
+        boot("trusted_agents") { TrustedExternalAgentRegistry.initialize(context) }
+        boot("external_gateway") { ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter()) }
+        _initializationFailures.value = failures
+        _systemStatus.value = if (failures.isEmpty()) "HEALTHY" else "DEGRADED"
         // Core network + memory + controlled external-agent runtime are initialized from the application context.
     }
 
