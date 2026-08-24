@@ -39,6 +39,7 @@ import com.shoshiluna.executive.ui.screens.PipelineScreen
 import com.shoshiluna.executive.ui.screens.DreamCommandCenterScreen
 import com.shoshiluna.executive.ui.screens.DreamCouncilScreen
 import com.shoshiluna.executive.ui.screens.ExternalNetworkScreen
+import com.shoshiluna.executive.ui.screens.AiFabricDashboardScreen
 import com.shoshiluna.executive.ui.workingcore.WorkingCoreChatScreen
 import com.shoshiluna.executive.ui.NotificationPermissionGate
 
@@ -267,7 +268,7 @@ private fun MoreExecutiveScreen() {
     Column(Modifier.fillMaxSize()) {
         Header("Executive Systems", "Specialists • Pipeline • Memory • Presence")
         ScrollableTabRow(selectedTabIndex = section, containerColor = Color(0xFF0B0B0B), contentColor = Gold) {
-            listOf("סוכנים", "צנרת", "רשת", "זיכרון", "נוכחות").forEachIndexed { index, label ->
+            listOf("סוכנים", "צנרת", "רשת", "זיכרון", "נוכחות", "AI Fabric").forEachIndexed { index, label ->
                 Tab(selected = section == index, onClick = { section = index }, text = { Text(label) })
             }
         }
@@ -277,7 +278,8 @@ private fun MoreExecutiveScreen() {
                 1 -> PipelineScreen()
                 2 -> ExternalNetworkScreen()
                 3 -> MemoryScreen()
-                else -> PresenceScreen()
+                4 -> PresenceScreen()
+                else -> AiFabricDashboardScreen()
             }
         }
     }
