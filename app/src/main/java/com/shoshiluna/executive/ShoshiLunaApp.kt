@@ -404,12 +404,12 @@ private fun PresenceScreen() {
     Column(Modifier.fillMaxSize()) {
         Header("Digital Presence", "Digital Human + Voice runtime monitoring")
         
-        Row(
-            Modifier.fillMaxWidth().height(380.dp).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            PhotorealPresenceCard("SHOSHI", R.drawable.shoshi_executive, shoshiState.name, Modifier.weight(1f))
-            PhotorealPresenceCard("LUNA", R.drawable.luna_executive, lunaState.name, Modifier.weight(1f))
+        Box(Modifier.fillMaxWidth().height(420.dp).padding(horizontal = 16.dp)) {
+            SpatialRenderer(Modifier.fillMaxSize())
+            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("SHOSHI • ${shoshiState.name}", color = Gold, modifier = Modifier.background(Ink.copy(alpha = 0.75f)).padding(8.dp))
+                Text("LUNA • ${lunaState.name}", color = Gold, modifier = Modifier.background(Ink.copy(alpha = 0.75f)).padding(8.dp))
+            }
         }
 
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
