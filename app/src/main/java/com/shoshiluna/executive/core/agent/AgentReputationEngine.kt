@@ -39,7 +39,7 @@ object AgentReputationEngine {
 
     fun getScore(agentId: String): Float {
         val rep = _reputations.value[agentId] ?: return 0.0f
-        if (rep.totalTasks == 0) return 1.0f
+        if (rep.totalTasks == 0) return 0.0f
         return (rep.totalTasks - rep.failedTasks).toFloat() / rep.totalTasks * rep.evidenceQuality
     }
 }
