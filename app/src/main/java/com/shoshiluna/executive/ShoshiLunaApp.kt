@@ -226,11 +226,11 @@ private fun MissionsScreen() {
                             onClick = { EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Manual Start") }
                         ) { Text("הפעל") }
                         TextButton(
-                            enabled = !state.emergencyHalt && mission.status == MissionStatus.RUNNING,
+                            enabled = !state.emergencyHalt && mission.status == MissionStatus.RUNNING && mission.workPlan.isEmpty(),
                             onClick = { CollaborationEngine.startConsultation(mission.id, ExecutiveAgent.SHOSHI.id, ExecutiveAgent.LUNA.id, mission.title) }
                         ) { Text("שיתוף פעולה") }
                         TextButton(
-                            enabled = !state.emergencyHalt && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.COMPLETED),
+                            enabled = !state.emergencyHalt && pendingApproval == null && mission.status != MissionStatus.REVIEW && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.COMPLETED),
                             onClick = { EmpireMissionControl.transitionStatus(mission.id, MissionStatus.COMPLETED, "Manual Complete") }
                         ) { Text("הושלם") }
                     }
