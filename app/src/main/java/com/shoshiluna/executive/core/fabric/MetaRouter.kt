@@ -1,6 +1,28 @@
 package com.shoshiluna.executive.core.fabric
 
 import kotlin.math.ln
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+data class RoutingSnapshot(
+    val taskId: String,
+    val selectedDisplayName: String,
+    val selectedProviderId: String,
+    val capabilities: Set<FabricCapability>,
+    val score: Double,
+    val fallbackCount: Int,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+object RoutingTelemetry {
+    private val _latest = MutableStateFlow<RoutingSnapshot?>(null)
+    val latest = _latest.asStateFlow()
+    internal fun record(decision: RoutingDecision, task: TaskRequirements) {
+        _latest.value = RoutingSnapshot(task.id, decision.primary.model.displayName,
+            decision.primary.model.providerId, task.capabilities, decision.primary.score,
+            decision.fallbacks.size)
+    }
+}
 
 object FabricTaskClassifier {
     fun classify(text: String, hasImage: Boolean = false, hasFile: Boolean = false): TaskRequirements {
@@ -45,6 +67,7 @@ object MetaRouter {
         val consensus = candidates.take(task.consensusCount.coerceIn(1, 5))
         val policyId = FabricPolicyEngine.authorize(primary.model, task).id
         val decision = RoutingDecision(task.id, primary, fallback, consensus, blocked, policyId)
+        RoutingTelemetry.record(decision, task)
         FabricAuditLedger.append("ROUTE_DECISION", task.id, primary.model.id, policyId, "PRIMARY=${primary.model.id};FALLBACKS=${fallback.joinToString { it.model.id }}")
         return Result.success(decision)
     }
