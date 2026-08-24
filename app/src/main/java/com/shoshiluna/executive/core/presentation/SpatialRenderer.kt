@@ -51,7 +51,7 @@ fun SpatialRenderer(
                             node.name = ExecutiveAvatar.SHOSHI.id
                             node.position = Position(shoshiX, shoshiY, shoshiZ)
                             node.isEditable = true
-                            animationClip(shoshiAnim).let { clip -> node.playAnimation(clip, loop = true); activeClips[node.name] = clip }
+                            animationClip(shoshiAnim).let { clip -> node.playAnimation(clip, loop = true); activeClips[ExecutiveAvatar.SHOSHI.id] = clip }
                             addChildNode(node)
                         }
                     }
@@ -64,7 +64,7 @@ fun SpatialRenderer(
                             node.name = ExecutiveAvatar.LUNA.id
                             node.position = Position(lunaX, lunaY, lunaZ)
                             node.isEditable = true
-                            animationClip(lunaAnim).let { clip -> node.playAnimation(clip, loop = true); activeClips[node.name] = clip }
+                            animationClip(lunaAnim).let { clip -> node.playAnimation(clip, loop = true); activeClips[ExecutiveAvatar.LUNA.id] = clip }
                             addChildNode(node)
                         }
                     }
@@ -101,8 +101,9 @@ private fun animationClip(state: AnimationState): String = when (state) {
 }
 
 private fun switchClip(node: ModelNode, clip: String, active: MutableMap<String, String>) {
-    if (active[node.name] == clip) return
-    active[node.name]?.let(node::stopAnimation)
+    val nodeName = node.name ?: return
+    if (active[nodeName] == clip) return
+    active[nodeName]?.let(node::stopAnimation)
     node.playAnimation(clip, loop = true)
-    active[node.name] = clip
+    active[nodeName] = clip
 }
