@@ -55,6 +55,19 @@ private val DreamGreen = Color(0xFF70E1A1)
 private val DreamAmber = Color(0xFFFFC866)
 private val DreamRed = Color(0xFFFF7A7A)
 
+internal object ExecutiveCarouselGeometry {
+    const val CONTAINER_HEIGHT = 740
+    const val PANEL_HEIGHT = 420
+    const val PORTRAIT_HEIGHT = 225
+    const val PORTRAIT_BOTTOM = 82
+    const val BUTTON_HEIGHT = 58
+    const val BUTTON_BOTTOM = 18
+
+    val portraitTop get() = CONTAINER_HEIGHT - PORTRAIT_BOTTOM - PORTRAIT_HEIGHT
+    val portraitBottom get() = CONTAINER_HEIGHT - PORTRAIT_BOTTOM
+    val buttonTop get() = CONTAINER_HEIGHT - BUTTON_BOTTOM - BUTTON_HEIGHT
+}
+
 @Composable
 fun DreamCommandCenterScreen() {
     val context = LocalContext.current
@@ -373,7 +386,7 @@ private fun ExecutiveVisionCarousel(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(740.dp)
+                .height(ExecutiveCarouselGeometry.CONTAINER_HEIGHT.dp)
                 .clip(RoundedCornerShape(34.dp))
                 .background(Brush.radialGradient(listOf(Color(0x55351E06), Color.Black)))
         ) {
@@ -387,7 +400,7 @@ private fun ExecutiveVisionCarousel(
                 state = pagerState,
                 contentPadding = PaddingValues(horizontal = 42.dp),
                 pageSpacing = 14.dp,
-                modifier = Modifier.fillMaxWidth().height(420.dp).zIndex(1f)
+                modifier = Modifier.fillMaxWidth().height(ExecutiveCarouselGeometry.PANEL_HEIGHT.dp).zIndex(1f)
             ) { page ->
                 val panel = panels[page]
                 Column(
@@ -421,16 +434,16 @@ private fun ExecutiveVisionCarousel(
             CarouselExecutivePortrait(
                 name = "SHOSHI",
                 resourceId = R.drawable.shoshi_executive,
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp, bottom = 82.dp).zIndex(2f)
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp, bottom = ExecutiveCarouselGeometry.PORTRAIT_BOTTOM.dp).zIndex(2f)
             )
             CarouselExecutivePortrait(
                 name = "LUNA",
                 resourceId = R.drawable.luna_executive,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 82.dp).zIndex(2f)
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = ExecutiveCarouselGeometry.PORTRAIT_BOTTOM.dp).zIndex(2f)
             )
             Button(
                 onClick = { onOpen(pagerState.currentPage) },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp).width(236.dp).height(58.dp).zIndex(3f),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = ExecutiveCarouselGeometry.BUTTON_BOTTOM.dp).width(236.dp).height(ExecutiveCarouselGeometry.BUTTON_HEIGHT.dp).zIndex(3f),
                 colors = ButtonDefaults.buttonColors(containerColor = DreamGold),
                 shape = RoundedCornerShape(18.dp),
                 border = BorderStroke(1.dp, Color(0xFFFFDB86))
@@ -456,7 +469,7 @@ private fun CarouselExecutivePortrait(name: String, resourceId: Int, modifier: M
     Box(
         modifier
             .width(112.dp)
-            .height(225.dp)
+            .height(ExecutiveCarouselGeometry.PORTRAIT_HEIGHT.dp)
             .clip(RoundedCornerShape(22.dp))
             .background(Color(0xEE08090C))
             .border(1.5.dp, DreamGold.copy(alpha = 0.9f), RoundedCornerShape(22.dp))
@@ -513,7 +526,7 @@ private fun DreamAgentCard(name: String, role: String, image: Int, score: Float?
                 Text(name, color = DreamGold, fontWeight = FontWeight.Black)
                 Text(role, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                 Text(
-                    score?.let { "Reliability ${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "Reliability: טרם נמדד",
+                    score?.let { "אמינות ${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "אמינות: טרם נמדדה",
                     color = if (score == null) Color.Gray else DreamGreen,
                     style = MaterialTheme.typography.labelSmall
                 )
