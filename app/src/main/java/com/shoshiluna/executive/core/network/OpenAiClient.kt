@@ -78,8 +78,8 @@ object OpenAiClient {
         )
 
         val provider = providerOverride ?: ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
-        if (!ApiKeyManager.hasProviderKey(context, provider)) {
-            return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
+        if (!ApiKeyManager.hasProviderAccess(context, provider)) {
+            return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} is not configured.")
         }
 
         SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting")
@@ -87,11 +87,18 @@ object OpenAiClient {
         val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message ->
             if (message.role == "user") message.content else "${message.role}: ${message.content}"
         }
-        val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
-        val effectiveModel = resolvedModelOverride ?: if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
+        val protocol = when (provider) {
+            AiProviderId.CUSTOM -> ApiKeyManager.customProtocol(context)
+            AiProviderId.LOCAL_OPENAI -> ApiKeyManager.localProtocol(context)
+            else -> AiProviderProtocols.forProvider(provider)
+        }
+        val effectiveModel = if (provider == AiProviderId.LOCAL_OPENAI) protocol.defaultModel
+            else resolvedModelOverride ?: if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
         val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input, images).toRequestBody(mediaType)
         val startedAt = System.currentTimeMillis()
-        val result = SecureCredentialBroker.withCredential(context, SecureCredentialBroker.reference(provider)) { apiKey ->
+        val result = if (provider == AiProviderId.LOCAL_OPENAI) {
+            executeProviderCall(provider, protocol, null, requestBody, effectiveModel)
+        } else SecureCredentialBroker.withCredential(context, SecureCredentialBroker.reference(provider)) { apiKey ->
             executeProviderCall(provider, protocol, apiKey, requestBody, effectiveModel)
         }
         val elapsed = System.currentTimeMillis() - startedAt
@@ -103,6 +110,7 @@ object OpenAiClient {
                 AiProviderId.ANTHROPIC -> "anthropic/$effectiveModel"
                 AiProviderId.GOOGLE_GEMINI -> "google/$effectiveModel"
                 AiProviderId.OPENROUTER -> effectiveModel
+                AiProviderId.LOCAL_OPENAI -> "local/$effectiveModel"
                 AiProviderId.CUSTOM -> "custom/$effectiveModel"
             }
             ModelRegistry.get(registryId)?.let {
@@ -117,14 +125,12 @@ object OpenAiClient {
     private fun executeProviderCall(
         provider: AiProviderId,
         protocol: AiProviderProtocol,
-        apiKey: String,
+        apiKey: String?,
         requestBody: okhttp3.RequestBody,
         effectiveModel: String
     ): AiCallResult {
-        val requestBuilder = Request.Builder()
-            .url(protocol.endpoint)
-            .header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
-            .header("Content-Type", "application/json")
+        val requestBuilder = Request.Builder().url(protocol.endpoint).header("Content-Type", "application/json")
+        if (!apiKey.isNullOrBlank()) requestBuilder.header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
         if (provider == AiProviderId.ANTHROPIC) requestBuilder.header("anthropic-version", "2023-06-01")
         val request = requestBuilder.post(requestBody).build()
 
