@@ -8,15 +8,13 @@ object ResilientAiClient {
     suspend fun getCompletionResult(
         context: Context,
         messages: List<ChatMessage>,
-        model: String
+        model: String,
+        taskProfile: AiTaskProfile = AiTaskRouter.classify(messages.lastOrNull { it.role == "user" }?.content.orEmpty())
     ): AiCallResult {
         val configured = ApiKeyManager.configuredProviders(context)
         if (configured.isEmpty()) return AiCallResult.Failure(AiConnectionState.API_KEY_MISSING, "No AI provider key is configured.")
         val active = ApiKeyManager.activeProvider(context)
-        val ordered = buildList {
-            if (active != null && active in configured) add(active)
-            addAll(configured.filterNot { it == active })
-        }
+        val ordered = AiTaskRouter.orderedProviders(configured, active, taskProfile)
         var last: AiCallResult.Failure? = null
         for (provider in ordered) {
             when (val result = OpenAiClient.getCompletionResult(messages, model, provider)) {
