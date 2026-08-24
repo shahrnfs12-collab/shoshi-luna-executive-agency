@@ -15,31 +15,63 @@ object ApiKeyManager {
     private const val PREFS_NAME = "shoshiluna_secure_keys"
     private const val KEY_OPENAI_API = "OPENAI_API_KEY"
     private const val KEY_ACTIVE_PROVIDER = "ACTIVE_AI_PROVIDER"
+    private const val KEY_PROVIDER_PREFIX = "AI_PROVIDER_KEY_"
 
     @Volatile
     private var cachedPrefs: SharedPreferences? = null
 
     fun saveOpenAiKey(context: Context, apiKey: String) {
-        val normalized = AiProviderRegistry.normalizeSecret(apiKey)
-        require(normalized.isNotBlank()) { "OpenAI API key cannot be blank" }
-        prefs(context).edit()
-            .putString(KEY_OPENAI_API, normalized)
-            .putString(KEY_ACTIVE_PROVIDER, AiProviderId.OPENAI.name)
-            .apply()
+        saveProviderKey(context, AiProviderId.OPENAI, apiKey)
     }
 
-    fun getOpenAiKey(context: Context): String? =
-        prefs(context).getString(KEY_OPENAI_API, null)?.takeIf { it.isNotBlank() }
+    fun getOpenAiKey(context: Context): String? = getProviderKey(context, AiProviderId.OPENAI)
 
     fun hasOpenAiKey(context: Context): Boolean = getOpenAiKey(context) != null
 
     fun clearOpenAiKey(context: Context) {
-        prefs(context).edit().remove(KEY_OPENAI_API).remove(KEY_ACTIVE_PROVIDER).apply()
+        clearProviderKey(context, AiProviderId.OPENAI)
     }
+
+    fun saveProviderKey(context: Context, provider: AiProviderId, apiKey: String) {
+        require(provider != AiProviderId.CUSTOM) { "Custom providers require an endpoint and cannot be inferred from a key alone" }
+        val normalized = AiProviderRegistry.normalizeSecret(apiKey)
+        require(normalized.isNotBlank()) { "API key cannot be blank" }
+        prefs(context).edit()
+            .putString(providerKey(provider), normalized)
+            .putString(KEY_ACTIVE_PROVIDER, provider.name)
+            .also { editor -> if (provider == AiProviderId.OPENAI) editor.putString(KEY_OPENAI_API, normalized) }
+            .apply()
+    }
+
+    fun getProviderKey(context: Context, provider: AiProviderId): String? {
+        val stored = prefs(context).getString(providerKey(provider), null)
+        if (!stored.isNullOrBlank()) return stored
+        return if (provider == AiProviderId.OPENAI) prefs(context).getString(KEY_OPENAI_API, null)?.takeIf { it.isNotBlank() } else null
+    }
+
+    fun hasProviderKey(context: Context, provider: AiProviderId): Boolean = getProviderKey(context, provider) != null
+
+    fun clearProviderKey(context: Context, provider: AiProviderId) {
+        val editor = prefs(context).edit().remove(providerKey(provider))
+        if (provider == AiProviderId.OPENAI) editor.remove(KEY_OPENAI_API)
+        if (activeProvider(context) == provider) editor.remove(KEY_ACTIVE_PROVIDER)
+        editor.apply()
+    }
+
+    fun configuredProviders(context: Context): Set<AiProviderId> = AiProviderId.entries
+        .filter { it != AiProviderId.CUSTOM && hasProviderKey(context, it) }
+        .toSet()
 
     fun activeProvider(context: Context): AiProviderId? = prefs(context)
         .getString(KEY_ACTIVE_PROVIDER, null)
         ?.let { runCatching { AiProviderId.valueOf(it) }.getOrNull() }
+
+    fun setActiveProvider(context: Context, provider: AiProviderId) {
+        require(hasProviderKey(context, provider)) { "Provider key is not configured" }
+        prefs(context).edit().putString(KEY_ACTIVE_PROVIDER, provider.name).apply()
+    }
+
+    private fun providerKey(provider: AiProviderId): String = "$KEY_PROVIDER_PREFIX${provider.name}"
 
     private fun prefs(context: Context): SharedPreferences {
         cachedPrefs?.let { return it }
