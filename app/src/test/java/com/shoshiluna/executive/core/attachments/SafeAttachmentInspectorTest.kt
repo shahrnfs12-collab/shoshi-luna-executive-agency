@@ -19,4 +19,10 @@ class SafeAttachmentInspectorTest {
         assertFalse(SafeAttachmentInspector.validateZipPath("safe/../bad"))
         assertFalse(SafeAttachmentInspector.validateZipPath("safe\u0000.png"))
     }
+
+    @Test fun detectsCommonGameAndAndroidProjects() {
+        assertTrue(SafeAttachmentInspector.detectProjectType(listOf("Assets/a.cs", "ProjectSettings/ProjectVersion.txt")) == "Unity")
+        assertTrue(SafeAttachmentInspector.detectProjectType(listOf("game/project.godot")) == "Godot")
+        assertTrue(SafeAttachmentInspector.detectProjectType(listOf("AndroidManifest.xml", "classes.dex")) == "Android APK")
+    }
 }
