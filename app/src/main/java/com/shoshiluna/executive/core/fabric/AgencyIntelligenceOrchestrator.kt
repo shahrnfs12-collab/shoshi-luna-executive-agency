@@ -16,6 +16,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 data class BrainAssignment(val role: String, val modelId: String, val providerId: String, val objective: String)
 data class BrainContribution(val assignment: BrainAssignment, val result: AiCallResult)
@@ -108,11 +112,28 @@ data class GrowthCapabilityNeed(
 object AgencyGrowthAutopilot {
     private val queued = ConcurrentHashMap<String, GrowthCapabilityNeed>()
     private val proposed = ConcurrentHashMap.newKeySet<String>()
+    private val _needs = MutableStateFlow<List<GrowthCapabilityNeed>>(emptyList())
+    val needs = _needs.asStateFlow()
+    @Volatile private var appContext: Context? = null
+    private val gson = Gson()
+
+    @Synchronized fun initialize(context: Context) {
+        if (appContext != null) return
+        appContext = context.applicationContext
+        val prefs = context.getSharedPreferences("agency_ai_growth_v1", Context.MODE_PRIVATE)
+        val type = object : TypeToken<List<GrowthCapabilityNeed>>() {}.type
+        runCatching { gson.fromJson<List<GrowthCapabilityNeed>>(prefs.getString("needs", "[]"), type) }.getOrNull().orEmpty()
+            .filter { ModelRegistry.get(it.modelId) != null }.forEach { queued[it.id] = it }
+        proposed.addAll(prefs.getStringSet("proposed", emptySet()).orEmpty())
+        _needs.value = queued.values.sortedBy { it.quotedMonthlyUsd }
+    }
 
     fun registerNeed(need: GrowthCapabilityNeed) {
         require(need.quotedMonthlyUsd > 0.0 && need.quoteEvidence.isNotBlank() && need.expectedBenefit.isNotBlank())
         requireNotNull(ModelRegistry.get(need.modelId)) { "Model must be documented before procurement" }
         queued[need.id] = need
+        _needs.value = queued.values.sortedBy { it.quotedMonthlyUsd }
+        persist()
         FabricAuditLedger.append("AI_GROWTH_NEED_QUEUED", need.missionId, need.modelId, outcome = "WAITING_FOR_5_PERCENT_FUNDED")
     }
 
@@ -122,10 +143,16 @@ object AgencyGrowthAutopilot {
         .mapNotNull { need ->
             if (need.id in proposed) return@mapNotNull null
             AiProcurementPlanner.propose(need.missionId, need.modelId, need.quotedMonthlyUsd,
-                "${need.expectedBenefit}; quote evidence=${need.quoteEvidence}").getOrNull()?.also { proposed += need.id }
+                "${need.expectedBenefit}; quote evidence=${need.quoteEvidence}").getOrNull()?.also { proposed.add(need.id); persist() }
         }
 
-    fun resetForTest() { queued.clear(); proposed.clear() }
+    fun resetForTest() { queued.clear(); proposed.clear(); _needs.value = emptyList() }
+
+    private fun persist() {
+        val context = appContext ?: return
+        check(context.getSharedPreferences("agency_ai_growth_v1", Context.MODE_PRIVATE).edit()
+            .putString("needs", gson.toJson(_needs.value)).putStringSet("proposed", proposed.toSet()).commit()) { "Growth queue persistence failed" }
+    }
 }
 
 /** Converts an owner-approved growth proposal into the durable financial pipeline; payment still requires biometric proof and a configured adapter. */
