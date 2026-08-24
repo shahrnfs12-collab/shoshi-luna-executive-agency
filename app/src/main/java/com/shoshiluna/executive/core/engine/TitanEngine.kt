@@ -37,6 +37,7 @@ object TitanEngine {
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        EmpireMissionControl.initialize(context)
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
