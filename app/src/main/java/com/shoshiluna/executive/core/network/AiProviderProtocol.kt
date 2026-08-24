@@ -28,13 +28,13 @@ object AiProviderProtocols {
             authenticationHeader = "x-api-key"
         )
         AiProviderId.GOOGLE_GEMINI -> AiProviderProtocol(
-            endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
-            defaultModel = "gemini-3.5-flash",
+            endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent",
+            defaultModel = "gemini-3.7-flash",
             authenticationHeader = "x-goog-api-key"
         )
         AiProviderId.OPENROUTER -> AiProviderProtocol(
             endpoint = "https://openrouter.ai/api/v1/chat/completions",
-            defaultModel = "openai/gpt-5.6-luna",
+            defaultModel = "openrouter/auto",
             authenticationHeader = "Authorization",
             authenticationPrefix = "Bearer "
         )
