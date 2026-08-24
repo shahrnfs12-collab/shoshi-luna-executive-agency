@@ -1,0 +1,23 @@
+# Gradle and Android build output
+.gradle/
+**/build/
+local.properties
+
+# Android Studio / IntelliJ local state
+.idea/
+*.iml
+
+# Native build output
+.cxx/
+**/.cxx/
+
+# OS files and signing material
+.DS_Store
+Thumbs.db
+*.jks
+*.keystore
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example

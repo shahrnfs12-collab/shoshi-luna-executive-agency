@@ -42,6 +42,9 @@ class ProductionHardeningTest {
 
     @Test fun verifiedToolResultHasMissionScopedEvidence() = runBlocking {
         val m = EmpireMissionControl.createMission("tool", ExecutiveAgent.SHOSHI.id)
+        EmpireMissionControl.transitionStatus(m.id, MissionStatus.PLANNED, "tool execution planned")
+        EmpireMissionControl.transitionStatus(m.id, MissionStatus.AWAITING_APPROVAL, "explicit approval required")
+        EmpireMissionControl.transitionStatus(m.id, MissionStatus.APPROVED, "approved for test execution")
         val def = ToolDefinition("real-read", "real", ToolRiskClass.READ_ONLY, false, timeoutMs = 1000)
         ToolGateway.registerTool(def, ToolGateway.ToolAdapter { "ok" })
         val r = ToolGateway.executeTool(ToolRequest(toolId=def.id, agentId=ExecutiveAgent.SHOSHI.id, missionId=m.id, inputData=mapOf("q" to "secret-but-required-by-tool"), idempotencyKey="e2e-key"))

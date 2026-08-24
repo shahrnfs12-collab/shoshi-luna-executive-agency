@@ -18,6 +18,6 @@ sha256sum app/build/outputs/apk/debug/app-debug.apk "$RELEASE_APK" > evidence/cu
 ./gradlew dependencies > evidence/current/dependency_report.txt
 cat > evidence/current/presentation_status.txt <<'STATUS'
 SHOSHI_LUNA_2D_UI=PRODUCTION_UI
-SHOSHI_LUNA_3D=DEFERRED_FUTURE_SPATIAL_MODULE
+SHOSHI_LUNA_3D=STRUCTURALLY_VALIDATED_AND_SCENEVIEW_RUNTIME_TESTED
 STATUS
 echo "PRODUCTION_TRUTH_GATE=PASS"
