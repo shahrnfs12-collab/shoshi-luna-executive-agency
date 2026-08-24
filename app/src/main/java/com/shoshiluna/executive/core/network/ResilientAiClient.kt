@@ -20,7 +20,7 @@ object ResilientAiClient {
             when (val result = OpenAiClient.getCompletionResult(messages, model, provider)) {
                 is AiCallResult.Success -> {
                     ApiKeyManager.setActiveProvider(context, provider)
-                    return result
+                    return result.copy(provider = provider, taskProfile = taskProfile)
                 }
                 is AiCallResult.Failure -> {
                     last = result
