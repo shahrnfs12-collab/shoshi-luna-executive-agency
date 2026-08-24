@@ -49,6 +49,8 @@ object TitanEngine {
         _isChatActive.value = active 
     }
 
+    fun applicationContext(): Context? = appContext
+
     fun reportLatency(latency: Long) {
         _networkLatency.value = latency
     }
