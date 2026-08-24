@@ -7,6 +7,7 @@ import com.shoshiluna.executive.core.security.ApiKeyManager
 object ResilientAiClient {
     private val freeFirstPriority = listOf(
         AiProviderId.OPENROUTER,
+        AiProviderId.OPENROUTER_UNCENSORED,
         AiProviderId.GROQ,
         AiProviderId.GOOGLE_GEMINI,
         AiProviderId.ANTHROPIC,
@@ -24,8 +25,8 @@ object ResilientAiClient {
 
         val active = ApiKeyManager.activeProvider(context)
         val ordered = buildList {
-            // Respect an explicitly selected custom provider first; otherwise prefer legal free-tier routes.
-            if (active == AiProviderId.CUSTOM && active in configured) add(active)
+            // Respect an explicit custom or uncensored selection first; otherwise prefer legal free-tier routes.
+            if (active in setOf(AiProviderId.CUSTOM, AiProviderId.OPENROUTER_UNCENSORED) && active in configured) add(active!!)
             addAll(freeFirstPriority.filter { it in configured && it !in this })
         }
 
