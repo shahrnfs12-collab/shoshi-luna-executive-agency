@@ -53,6 +53,8 @@ fun DreamCommandCenterScreen() {
     val reputations by AgentReputationEngine.reputations.collectAsState()
     val learnings by EvolutionEngine.learnings.collectAsState()
     val readiness = remember { RuntimeReadiness.inspect(context) }
+    val aiReady = readiness.items.firstOrNull { it.name == "AI provider" }?.ready == true
+    val spatialReady = readiness.items.filter { it.name.startsWith("3D ") }.all { it.ready }
 
     val activeMissions = empire.missions.count { it.status !in terminalMissionStatuses }
     val waitingMissions = empire.missions.count { it.status in waitingMissionStatuses }
@@ -97,8 +99,12 @@ fun DreamCommandCenterScreen() {
                     Text("SHOSHI • LUNA", color = DreamGold, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
                     Text("SUPER-AGENCY EXECUTIVE WORLD", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
-                        if (empire.emergencyHalt) "GLOBAL STATUS • EMERGENCY HALT" else "GLOBAL STATUS • OPERATIONAL",
-                        color = if (empire.emergencyHalt) DreamRed else DreamGreen,
+                        when {
+                            empire.emergencyHalt -> "GLOBAL STATUS • EMERGENCY HALT"
+                            aiReady -> "GLOBAL STATUS • OPERATIONAL"
+                            else -> "LOCAL CORE READY • AI NOT VERIFIED"
+                        },
+                        color = if (empire.emergencyHalt) DreamRed else if (aiReady) DreamGreen else DreamAmber,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -158,7 +164,7 @@ fun DreamCommandCenterScreen() {
                 DreamStatusLine("Verified Evidence", verifiedEvidence > 0, "$verifiedEvidence verified records")
                 DreamStatusLine("Sovereign Memory", true, "${memories.size} protected memories")
                 DreamStatusLine("2D Executive Presence", true, "Production UI")
-                DreamStatusLine("Spatial 3D World", false, "Deferred — presentation-only future module")
+                DreamStatusLine("Spatial 3D World", spatialReady, if (spatialReady) "SHOSHI and LUNA GLB assets packaged and runtime-gated" else "One or more GLB assets are unavailable")
             }
         }
 
