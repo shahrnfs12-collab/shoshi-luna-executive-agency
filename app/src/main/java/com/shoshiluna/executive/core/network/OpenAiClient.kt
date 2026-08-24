@@ -10,6 +10,8 @@ import com.shoshiluna.executive.core.security.ApiKeyManager
 import com.shoshiluna.executive.core.fabric.FabricAuditLedger
 import com.shoshiluna.executive.core.fabric.ProviderHealthMonitor
 import com.shoshiluna.executive.core.fabric.SecureCredentialBroker
+import com.shoshiluna.executive.core.fabric.ModelRegistry
+import com.shoshiluna.executive.core.fabric.RegistryStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -95,6 +97,19 @@ object OpenAiClient {
         val elapsed = System.currentTimeMillis() - startedAt
         val success = result is AiCallResult.Success
         ProviderHealthMonitor.record(provider.name, success, elapsed)
+        if (success) {
+            val registryId = when (provider) {
+                AiProviderId.OPENAI -> "openai/$effectiveModel"
+                AiProviderId.ANTHROPIC -> "anthropic/$effectiveModel"
+                AiProviderId.GOOGLE_GEMINI -> "google/$effectiveModel"
+                AiProviderId.OPENROUTER -> effectiveModel
+                AiProviderId.CUSTOM -> "custom/$effectiveModel"
+            }
+            ModelRegistry.get(registryId)?.let {
+                ModelRegistry.transition(registryId, RegistryStatus.CONNECTED,
+                    it.metrics.copy(latencyP50Ms = elapsed, lastSuccessAt = System.currentTimeMillis(), consecutiveFailures = 0))
+            }
+        }
         FabricAuditLedger.append("PROVIDER_CALL", modelId = (result as? AiCallResult.Success)?.model ?: effectiveModel, outcome = if (success) "SUCCESS:${elapsed}ms" else "FAILED:${elapsed}ms")
         result
     }
