@@ -36,6 +36,7 @@ import com.shoshiluna.executive.ui.screens.DreamCommandCenterScreen
 import com.shoshiluna.executive.ui.screens.DreamCouncilScreen
 import com.shoshiluna.executive.ui.screens.ExternalNetworkScreen
 import com.shoshiluna.executive.ui.workingcore.WorkingCoreChatScreen
+import com.shoshiluna.executive.ui.NotificationPermissionGate
 
 private val Gold = Color(0xFFD8B45A)
 private val DeepGold = Color(0xFF8B6A25)
@@ -46,6 +47,7 @@ private val Soft = Color(0xFFE7E0D0)
 @Composable
 fun ShoshiLunaApp() {
     val context = LocalContext.current
+    NotificationPermissionGate()
     LaunchedEffect(context) {
         VoiceEngine.initialize(context)
     }
