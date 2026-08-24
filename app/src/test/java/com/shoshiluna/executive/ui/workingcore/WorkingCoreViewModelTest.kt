@@ -4,6 +4,8 @@ import com.shoshiluna.executive.core.agent.ExecutiveAgent
 import com.shoshiluna.executive.core.agent.WorkingCoreAiGateway
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.AiConnectionState
+import com.shoshiluna.executive.core.network.AiProviderId
+import com.shoshiluna.executive.core.network.AiTaskProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -54,6 +56,18 @@ class WorkingCoreViewModelTest {
         assertEquals(AiConnectionState.API_KEY_MISSING, vm.uiState.value.connection)
         assertFalse(vm.uiState.value.messages.any { !it.fromUser })
         assertEquals("missing", vm.uiState.value.error)
+    }
+
+    @Test
+    fun successfulRouteExposesProfileProviderAndResolvedModel() = runTest(dispatcher) {
+        val fake = object : WorkingCoreAiGateway {
+            override suspend fun send(agent: ExecutiveAgent, prompt: String): AiCallResult =
+                AiCallResult.Success("ok", AiProviderId.OPENROUTER, AiTaskProfile.RESEARCH, "google/gemini-3.7-flash")
+        }
+        val vm = WorkingCoreViewModel(fake)
+        vm.send("research this")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals("RESEARCH • OPENROUTER • google/gemini-3.7-flash", vm.uiState.value.routingLabel)
     }
 
     @Test
