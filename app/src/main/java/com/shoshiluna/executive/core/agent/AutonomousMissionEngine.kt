@@ -39,6 +39,8 @@ object AutonomousMissionEngine {
         EmpireMissionControl.transitionStatus(mission.id, MissionStatus.PLANNED, "Autonomous work plan created")
         EmpireMissionControl.transitionStatus(mission.id, MissionStatus.ASSIGNED, "Work divided between SHOSHI and LUNA")
         EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Bounded autonomous analysis started")
+        EmpireMissionControl.updatePlanStep(mission.id, 1, "COMPLETED", "Goal and success criteria captured")
+        EmpireMissionControl.updatePlanStep(mission.id, 2, "RUNNING", "Counterpart review started")
         CollaborationEngine.startConsultation(
             missionId = mission.id,
             initiatorId = requestedOwner.id,
