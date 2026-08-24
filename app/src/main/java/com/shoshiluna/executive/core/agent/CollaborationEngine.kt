@@ -13,6 +13,7 @@ import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.business.EvidenceRegistry
 import com.shoshiluna.executive.core.security.ApprovalRiskLevel
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import com.shoshiluna.executive.core.fabric.AgencyBrainCouncil
 
 /**
  * Executive consultation workflow. No canned "success" responses.
@@ -48,12 +49,8 @@ object CollaborationEngine {
 
             val memory = SovereignMemoryVault.getMissionMemory(missionId) +
                 SovereignMemoryVault.getPartition(MemoryPartition.EXECUTIVE_SHARED, targetId)
-            val aiResult = provider.chatResult(
-                prompt = "Review this mission/topic and give a concrete executive analysis, risks, evidence gaps and next actions: $topic",
-                context = memory,
-                missionId = missionId,
-                agent = if (targetId == ExecutiveAgent.LUNA.id) ExecutiveAgent.LUNA else ExecutiveAgent.SHOSHI
-            )
+            val council = AgencyBrainCouncil.execute(topic, memory, missionId)
+            val aiResult = council.finalResult
             val reply = when (aiResult) {
                 is com.shoshiluna.executive.core.network.AiCallResult.Success -> aiResult.text
                 is com.shoshiluna.executive.core.network.AiCallResult.Failure -> "AI ${aiResult.state}: ${aiResult.safeMessage}"
