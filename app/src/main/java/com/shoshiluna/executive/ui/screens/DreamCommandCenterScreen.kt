@@ -26,6 +26,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shoshiluna.executive.R
+import com.shoshiluna.executive.BuildConfig
 import com.shoshiluna.executive.core.agent.*
 import com.shoshiluna.executive.core.audit.AuditTrail
 import com.shoshiluna.executive.core.business.EvidenceRegistry
@@ -109,7 +110,7 @@ fun DreamCommandCenterScreen() {
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text("SHOSHI • LUNA", color = DreamGold, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                    Text("עולם הסוכנות הניהולית", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("עולם הסוכנות הניהולית • v${BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
                         when {
                             empire.emergencyHalt -> "מצב כללי • עצירת חירום"
