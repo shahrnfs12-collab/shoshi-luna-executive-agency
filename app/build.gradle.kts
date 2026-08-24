@@ -13,17 +13,15 @@ android {
         applicationId = "com.shoshiluna.executive"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "2.4.1"
+        versionCode = 15
+        versionName = "2.4.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
-            resValue("string", "app_name", "ShoshiLuna Test")
+            // The distributed CI APK must update the installed production package.
         }
         release {
             isMinifyEnabled = true
