@@ -24,12 +24,16 @@ import com.shoshiluna.executive.R
 import com.shoshiluna.executive.core.agent.*
 import com.shoshiluna.executive.core.audit.AuditTrail
 import com.shoshiluna.executive.core.business.EvidenceRegistry
+import com.shoshiluna.executive.core.business.ArtifactFactory
+import com.shoshiluna.executive.core.business.ToolGateway
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.empire.MissionStatus
 import com.shoshiluna.executive.core.dream.ExecutiveBriefEngine
 import com.shoshiluna.executive.core.external.TrustedExternalAgentRegistry
 import com.shoshiluna.executive.core.health.RuntimeReadiness
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import com.shoshiluna.executive.core.evolution.EvolutionEngine
+import com.shoshiluna.executive.core.evolution.LearningStatus
 import kotlin.math.roundToInt
 
 private val DreamGold = Color(0xFFE2C06B)
@@ -49,7 +53,11 @@ fun DreamCommandCenterScreen() {
     val evidence by EvidenceRegistry.items.collectAsState()
     val externalAgents by TrustedExternalAgentRegistry.agents.collectAsState()
     val reputations by AgentReputationEngine.reputations.collectAsState()
+    val learnings by EvolutionEngine.learnings.collectAsState()
     val readiness = remember { RuntimeReadiness.inspect(context) }
+    val aiReady = readiness.items.firstOrNull { it.name == "AI provider" }?.ready == true
+    val spatialReady = readiness.items.filter { it.name.startsWith("3D ") }.all { it.ready }
+    val registeredTools = remember { ToolGateway.registeredTools() }
 
     val activeMissions = empire.missions.count { it.status !in terminalMissionStatuses }
     val waitingMissions = empire.missions.count { it.status in waitingMissionStatuses }
@@ -92,10 +100,14 @@ fun DreamCommandCenterScreen() {
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text("SHOSHI • LUNA", color = DreamGold, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                    Text("SUPER-AGENCY EXECUTIVE WORLD", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("עולם הסוכנות הניהולית", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
-                        if (empire.emergencyHalt) "GLOBAL STATUS • EMERGENCY HALT" else "GLOBAL STATUS • OPERATIONAL",
-                        color = if (empire.emergencyHalt) DreamRed else DreamGreen,
+                        when {
+                            empire.emergencyHalt -> "מצב כללי • עצירת חירום"
+                            aiReady -> "מצב כללי • פעיל"
+                            else -> "הליבה מוכנה • AI טרם אומת"
+                        },
+                        color = if (empire.emergencyHalt) DreamRed else if (aiReady) DreamGreen else DreamAmber,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -109,26 +121,26 @@ fun DreamCommandCenterScreen() {
                     name = "SHOSHI",
                     role = "Growth • Strategy • Orchestration",
                     image = R.drawable.shoshi_executive,
-                    score = reputations[ExecutiveAgent.SHOSHI.id]?.let { AgentReputationEngine.getScore(it.agentId) } ?: 1f,
+                    score = reputations[ExecutiveAgent.SHOSHI.id]?.takeIf { it.totalTasks > 0 }?.let { AgentReputationEngine.getScore(it.agentId) },
                     modifier = Modifier.weight(1f)
                 )
                 DreamAgentCard(
                     name = "LUNA",
                     role = "Partnerships • Operations • Challenge",
                     image = R.drawable.luna_executive,
-                    score = reputations[ExecutiveAgent.LUNA.id]?.let { AgentReputationEngine.getScore(it.agentId) } ?: 1f,
+                    score = reputations[ExecutiveAgent.LUNA.id]?.takeIf { it.totalTasks > 0 }?.let { AgentReputationEngine.getScore(it.agentId) },
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
         item {
-            Text("EXECUTIVE WEATHER", color = DreamGold, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
+            Text("תמונת מצב ניהולית", color = DreamGold, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DreamMetric("MISSIONS", activeMissions.toString(), if (activeMissions > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
-                DreamMetric("WAITING", waitingMissions.toString(), if (waitingMissions > 0) DreamAmber else Color.LightGray, Modifier.weight(1f))
-                DreamMetric("APPROVALS", pendingApprovals.toString(), if (pendingApprovals > 0) DreamAmber else DreamGreen, Modifier.weight(1f))
-                DreamMetric("COUNCIL", activeCouncil.toString(), if (activeCouncil > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
+                DreamMetric("משימות", activeMissions.toString(), if (activeMissions > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
+                DreamMetric("ממתינות", waitingMissions.toString(), if (waitingMissions > 0) DreamAmber else Color.LightGray, Modifier.weight(1f))
+                DreamMetric("אישורים", pendingApprovals.toString(), if (pendingApprovals > 0) DreamAmber else DreamGreen, Modifier.weight(1f))
+                DreamMetric("מועצה", activeCouncil.toString(), if (activeCouncil > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
             }
         }
 
@@ -153,9 +165,14 @@ fun DreamCommandCenterScreen() {
                 DreamStatusLine("AI Provider", readiness.items.firstOrNull { it.name == "AI provider" }?.ready == true, readiness.items.firstOrNull { it.name == "AI provider" }?.detail ?: "Unknown")
                 DreamStatusLine("Trusted External Agents", trustedExternal > 0, "$trustedExternal trusted / ${externalAgents.size} registered")
                 DreamStatusLine("Verified Evidence", verifiedEvidence > 0, "$verifiedEvidence verified records")
+                DreamStatusLine(
+                    "Execution Tools",
+                    registeredTools.any { ToolGateway.hasRuntimeAdapter(it.id) },
+                    "${registeredTools.count { ToolGateway.hasRuntimeAdapter(it.id) }} connected / ${registeredTools.size} registered"
+                )
                 DreamStatusLine("Sovereign Memory", true, "${memories.size} protected memories")
                 DreamStatusLine("2D Executive Presence", true, "Production UI")
-                DreamStatusLine("Spatial 3D World", false, "Deferred — presentation-only future module")
+                DreamStatusLine("Spatial 3D World", spatialReady, if (spatialReady) "SHOSHI and LUNA GLB assets packaged and runtime-gated" else "One or more GLB assets are unavailable")
             }
         }
 
@@ -178,7 +195,7 @@ fun DreamCommandCenterScreen() {
         }
 
         item {
-            DreamGlassCard("MISSION CONTROL • NOW") {
+            DreamGlassCard("בקרת משימות • עכשיו") {
                 if (empire.missions.isEmpty()) {
                     Text("אין משימות פעילות. פתחי צ׳אט ובקשי מ-SHOSHI או LUNA ליצור משימה.", color = Color.LightGray)
                 } else {
@@ -189,6 +206,28 @@ fun DreamCommandCenterScreen() {
                             Column(Modifier.weight(1f)) {
                                 Text(mission.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                                 Text("${mission.status} • ${if (mission.ownerId == ExecutiveAgent.SHOSHI.id) "SHOSHI" else if (mission.ownerId == ExecutiveAgent.LUNA.id) "LUNA" else mission.ownerId}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                                if (mission.workPlan.isNotEmpty()) {
+                                    Spacer(Modifier.height(5.dp))
+                                    mission.workPlan.forEach { encoded ->
+                                        val parts = encoded.split("|", limit = 4)
+                                        val owner = parts.getOrNull(1)?.let {
+                                            when (it) {
+                                                ExecutiveAgent.SHOSHI.id -> "SHOSHI"
+                                                ExecutiveAgent.LUNA.id -> "LUNA"
+                                                else -> it
+                                            }
+                                        } ?: "SYSTEM"
+                                        val approval = parts.getOrNull(2) == "true"
+                                        val description = parts.getOrNull(3) ?: encoded
+                                        val stepId = parts.firstOrNull().orEmpty()
+                                        val progress = mission.workPlanProgress[stepId] ?: "PENDING"
+                                        Text(
+                                            "${parts.firstOrNull() ?: "•"}. $owner — $description · $progress${if (approval) " · דורש אישור" else ""}",
+                                            color = if (approval) DreamAmber else Color.LightGray,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
                             }
                         }
                         Spacer(Modifier.height(8.dp))
@@ -205,6 +244,46 @@ fun DreamCommandCenterScreen() {
                 if (recent.isEmpty()) Text("No audit events yet.", color = Color.Gray)
                 recent.forEach { audit ->
                     Text("• ${audit.action} → ${audit.result}", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        if (ArtifactFactory.artifacts.isNotEmpty()) {
+            item {
+                DreamGlassCard("DELIVERABLES • REAL OUTPUTS") {
+                    ArtifactFactory.artifacts.sortedByDescending { it.timestamp }.take(5).forEach { artifact ->
+                        Text("${artifact.type} • ${artifact.creatorAgentId}", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text(artifact.content.take(280), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        Text("SHA-256 ${artifact.hash.take(16)}…", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                    }
+                }
+            }
+        }
+
+        item {
+            DreamGlassCard("התפתחות • למידה מאומתת") {
+                if (learnings.isEmpty()) {
+                    Text("אין עדיין לקחים מאומתים. למידה נוצרת רק מתוצאה עם ראיות.", color = Color.Gray)
+                } else {
+                    learnings.values.sortedByDescending { it.createdAt }.take(6).forEach { learning ->
+                        Text(learning.lesson, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("${learning.status} • ראיות ${learning.evidenceIds.size}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        when (learning.status) {
+                            LearningStatus.PROPOSED -> OutlinedButton(onClick = {
+                                EvolutionEngine.requestActivation(learning.id, ExecutiveAgent.SHOSHI.id)
+                            }) { Text("בקשי אישור להפעלת הלקח") }
+                            LearningStatus.AWAITING_APPROVAL -> {
+                                val approved = learning.approvalRequestId?.let(HumanApprovalGateway::isApproved) == true
+                                if (approved) Button(onClick = { EvolutionEngine.finalizeActivation(learning.id) }) {
+                                    Text("הפעילי לקח שאושר")
+                                } else Text("ממתין להחלטת בעלים", color = DreamAmber)
+                            }
+                            LearningStatus.ACTIVE -> Text("פעיל ומשפיע על עבודה עתידית", color = DreamGreen)
+                            LearningStatus.REJECTED -> Text("נדחה", color = DreamRed)
+                        }
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                    }
                 }
             }
         }
@@ -233,14 +312,18 @@ fun DreamCommandCenterScreen() {
 }
 
 @Composable
-private fun DreamAgentCard(name: String, role: String, image: Int, score: Float, modifier: Modifier = Modifier) {
+private fun DreamAgentCard(name: String, role: String, image: Int, score: Float?, modifier: Modifier = Modifier) {
     ElevatedCard(modifier, colors = CardDefaults.elevatedCardColors(containerColor = DreamGlass), shape = RoundedCornerShape(22.dp)) {
         Column {
             Image(painterResource(image), name, Modifier.fillMaxWidth().height(235.dp), contentScale = ContentScale.Crop)
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(name, color = DreamGold, fontWeight = FontWeight.Black)
                 Text(role, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
-                Text("Reliability ${(score.coerceIn(0f, 1f) * 100).roundToInt()}%", color = DreamGreen, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    score?.let { "Reliability ${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "Reliability: טרם נמדד",
+                    color = if (score == null) Color.Gray else DreamGreen,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }

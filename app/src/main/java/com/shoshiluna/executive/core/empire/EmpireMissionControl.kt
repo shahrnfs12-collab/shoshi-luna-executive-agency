@@ -28,7 +28,9 @@ data class EmpireMission(
     val requiredCondition: String? = null,
     val resumePolicy: String? = null,
     val correlationId: String? = null,
-    val taskDependencies: List<String> = emptyList()
+    val taskDependencies: List<String> = emptyList(),
+    val workPlan: List<String> = emptyList(),
+    val workPlanProgress: Map<String, String> = emptyMap()
 )
 
 data class EmpireState(
@@ -44,6 +46,13 @@ data class EmpireState(
 object EmpireMissionControl {
     private val _state = MutableStateFlow(EmpireState())
     val state: StateFlow<EmpireState> = _state.asStateFlow()
+    @Volatile private var store: EmpireMissionStore? = null
+
+    @Synchronized
+    fun initialize(context: android.content.Context) {
+        if (store != null) return
+        store = EmpireMissionStore(context).also { _state.value = it.load() }
+    }
 
     @Synchronized
     fun emergencyHalt() {
@@ -54,12 +63,14 @@ object EmpireMissionControl {
                 else mission.copy(status = MissionStatus.HALTED, updatedAt = System.currentTimeMillis())
             }
         )
+        persist()
         audit("SYSTEM", null, "EMERGENCY_HALT", "ACTIVATED")
     }
 
     @Synchronized
     fun releaseHalt() {
         _state.value = _state.value.copy(emergencyHalt = false)
+        persist()
         audit("SYSTEM", null, "EMERGENCY_HALT", "RELEASED")
     }
 
@@ -73,8 +84,46 @@ object EmpireMissionControl {
 
         val mission = EmpireMission(title = cleanTitle, ownerId = cleanOwner, environment = environment)
         _state.value = _state.value.copy(missions = listOf(mission) + _state.value.missions)
+        persist()
         audit(cleanOwner, mission.id, "MISSION_CREATED", "${mission.status}; environment=${mission.environment}")
         return mission
+    }
+
+    @Synchronized
+    fun attachPlan(missionId: String, workPlan: List<String>) {
+        require(workPlan.isNotEmpty()) { "Mission work plan is required" }
+        var found = false
+        _state.value = _state.value.copy(missions = _state.value.missions.map { mission ->
+            if (mission.id == missionId) {
+                found = true
+                check(mission.status == MissionStatus.CREATED) { "Plan can only be attached to a created mission" }
+                mission.copy(
+                    workPlan = workPlan.toList(),
+                    workPlanProgress = workPlan.mapNotNull { it.substringBefore("|").takeIf(String::isNotBlank) }.associateWith { "PENDING" },
+                    updatedAt = System.currentTimeMillis()
+                )
+            } else mission
+        })
+        require(found) { "Unknown missionId: $missionId" }
+        persist()
+        audit("SYSTEM", missionId, "MISSION_PLAN_ATTACHED", "steps=${workPlan.size}")
+    }
+
+    @Synchronized
+    fun updatePlanStep(missionId: String, step: Int, status: String, reason: String) {
+        require(step > 0 && status in setOf("PENDING", "RUNNING", "COMPLETED", "WAITING", "WAITING_APPROVAL", "FAILED"))
+        require(reason.isNotBlank())
+        var found = false
+        _state.value = _state.value.copy(missions = _state.value.missions.map { mission ->
+            if (mission.id == missionId) {
+                found = true
+                require(mission.workPlan.any { it.substringBefore("|") == step.toString() }) { "Unknown plan step" }
+                mission.copy(workPlanProgress = mission.workPlanProgress + (step.toString() to status), updatedAt = System.currentTimeMillis())
+            } else mission
+        })
+        require(found) { "Unknown missionId: $missionId" }
+        persist()
+        audit("SYSTEM", missionId, "MISSION_STEP_$step", "$status; ${reason.trim()}")
     }
 
     @Synchronized
@@ -103,6 +152,7 @@ object EmpireMissionControl {
             }
         )
         require(found) { "Unknown missionId: $missionId" }
+        persist()
         audit(owner, missionId, "MISSION_STATUS", "$nextStatus; reason=${reason.trim()}")
     }
 
@@ -131,6 +181,7 @@ object EmpireMissionControl {
             }
         )
         require(found) { "Unknown missionId: $missionId" }
+        persist()
         audit(owner, missionId, "MISSION_WAITING", "$status; condition=${condition.trim()}")
     }
 
@@ -149,6 +200,8 @@ object EmpireMissionControl {
             )
         )
     }
+
+    private fun persist() { store?.save(_state.value) }
 
     private val waitingStatuses = setOf(
         MissionStatus.WAITING,

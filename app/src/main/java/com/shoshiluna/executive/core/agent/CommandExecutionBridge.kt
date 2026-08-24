@@ -44,8 +44,25 @@ class CommandExecutionBridge {
                 title = requireNotNull(extractMissionTitle(text)),
                 selectedAgent = selectedAgent
             )
+            extractAutonomousGoal(text) != null -> executeAutonomousGoal(
+                goal = requireNotNull(extractAutonomousGoal(text)),
+                selectedAgent = selectedAgent
+            )
             else -> CommandBridgeResult.NotHandled
         }
+    }
+
+    private fun executeAutonomousGoal(goal: String, selectedAgent: ExecutiveAgent): CommandBridgeResult = runCatching {
+        val receipt = AutonomousMissionEngine.submitGoal(goal, selectedAgent)
+        executed(
+            command = "AUTONOMOUS_GOAL",
+            message = "המשימה נפתחה והעבודה חולקה בין SHOSHI ל-LUNA: ${receipt.mission.title} [${receipt.mission.id.take(8)}] · ${receipt.plan.size} שלבים"
+        )
+    }.getOrElse { error ->
+        CommandBridgeResult.Rejected(
+            message = "המשימה נחסמה: ${error.message ?: "Unknown mission error"}",
+            command = "AUTONOMOUS_GOAL"
+        )
     }
 
     private fun executeCreateMission(title: String, selectedAgent: ExecutiveAgent): CommandBridgeResult {
@@ -125,6 +142,16 @@ class CommandExecutionBridge {
     }
 
     private fun normalize(value: String): String = value.trim().lowercase().replace(Regex("\\s+"), " ")
+
+    private fun extractAutonomousGoal(original: String): String? {
+        val trimmed = original.trim()
+        val prefixes = listOf(
+            "תבנו לי ", "תבני לי ", "תעשו לי ", "תעשי לי ", "תכינו לי ", "תכיני לי ",
+            "בנו לי ", "בני לי ", "build me ", "create for me "
+        )
+        return prefixes.firstOrNull { trimmed.lowercase().startsWith(it) }
+            ?.let { trimmed.substring(it.length).trim().takeIf(String::isNotBlank) }
+    }
 
     companion object {
         private val HELP_COMMANDS = setOf("help", "/help", "עזרה", "פקודות")

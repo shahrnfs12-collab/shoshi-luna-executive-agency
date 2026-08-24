@@ -57,16 +57,18 @@ object OpenAiClient {
 
     suspend fun getCompletionResult(
         messages: List<ChatMessage>,
-        model: String = DEFAULT_MODEL
+        model: String = DEFAULT_MODEL,
+        providerOverride: AiProviderId? = null
     ): AiCallResult = withContext(Dispatchers.IO) {
         val context = appContext ?: return@withContext fail(
             AiConnectionState.OFFLINE,
             "AI runtime is not initialized."
         )
 
-        val apiKey = ApiKeyManager.getOpenAiKey(context)
+        val provider = providerOverride ?: ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
+        val apiKey = ApiKeyManager.getProviderKey(context, provider)
         if (apiKey.isNullOrBlank()) {
-            return@withContext fail(AiConnectionState.API_KEY_MISSING, "OpenAI API key is not configured.")
+            return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
         }
 
         SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting")
@@ -74,13 +76,15 @@ object OpenAiClient {
         val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message ->
             if (message.role == "user") message.content else "${message.role}: ${message.content}"
         }
-        val requestBody = gson.toJson(ResponsesRequest(model = model, instructions = instructions, input = input)).toRequestBody(mediaType)
-        val request = Request.Builder()
-            .url("https://api.openai.com/v1/responses")
-            .header("Authorization", "Bearer $apiKey")
+        val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
+        val effectiveModel = if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
+        val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input).toRequestBody(mediaType)
+        val requestBuilder = Request.Builder()
+            .url(protocol.endpoint)
+            .header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
             .header("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
+        if (provider == AiProviderId.ANTHROPIC) requestBuilder.header("anthropic-version", "2023-06-01")
+        val request = requestBuilder.post(requestBody).build()
 
         try {
             client.newCall(request).execute().use { response ->
@@ -91,7 +95,7 @@ object OpenAiClient {
                         in 500..599 -> AiConnectionState.ERROR
                         else -> AiConnectionState.ERROR
                     }
-                    return@withContext fail(state, safeHttpMessage(response.code), response.code)
+                    return@withContext fail(state, safeHttpMessage(provider, response.code), response.code)
                 }
 
                 val body = response.body?.string().orEmpty()
@@ -99,7 +103,7 @@ object OpenAiClient {
                     return@withContext fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
                 }
 
-                val text = extractResponseText(body)
+                val text = AiProviderPayloadCodec.decodeText(provider, body)
                 if (text.isBlank()) {
                     return@withContext fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
                 }
@@ -153,11 +157,12 @@ object OpenAiClient {
         return AiCallResult.Failure(state, message, code)
     }
 
-    private fun safeHttpMessage(code: Int): String = when (code) {
-        401 -> "OpenAI rejected the configured API key (HTTP 401)."
-        403 -> "OpenAI denied this request (HTTP 403)."
-        429 -> "OpenAI rate limit reached (HTTP 429)."
-        in 500..599 -> "OpenAI service error (HTTP $code)."
-        else -> "OpenAI request failed (HTTP $code)."
+    private fun safeHttpMessage(provider: AiProviderId, code: Int): String = when (code) {
+        401 -> "${provider.name} rejected the configured API key (HTTP 401)."
+        402 -> "${provider.name} requires active billing or credits (HTTP 402)."
+        403 -> "${provider.name} denied this request (HTTP 403)."
+        429 -> "${provider.name} rate limit or quota reached (HTTP 429)."
+        in 500..599 -> "${provider.name} service error (HTTP $code)."
+        else -> "${provider.name} request failed (HTTP $code)."
     }
 }

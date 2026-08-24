@@ -7,6 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import com.shoshiluna.executive.core.business.ArtifactFactory
+import com.shoshiluna.executive.core.business.ArtifactType
+import com.shoshiluna.executive.core.business.EvidenceCategory
+import com.shoshiluna.executive.core.business.EvidenceRegistry
 
 /**
  * Executive consultation workflow. No canned "success" responses.
@@ -58,6 +62,7 @@ object CollaborationEngine {
             CommunicationBus.sendMessage(response)
 
             if (offline) {
+                EmpireMissionControl.updatePlanStep(missionId, 2, "WAITING", "AI provider unavailable")
                 EmpireMissionControl.transitionStatus(
                     missionId,
                     MissionStatus.WAITING_FOR_EXTERNAL_RESPONSE,
@@ -75,6 +80,22 @@ object CollaborationEngine {
                 finalOutput = reply
             )
             results[missionId] = result
+            EmpireMissionControl.updatePlanStep(missionId, 2, "COMPLETED", "Counterpart review completed")
+            val artifact = ArtifactFactory.createArtifact(
+                type = ArtifactType.REPORT,
+                agentId = targetId,
+                taskId = conversation.id,
+                content = reply
+            )
+            EvidenceRegistry.record(
+                category = EvidenceCategory.AI_INFERENCE,
+                content = "Executive deliverable created with SHA-256 ${artifact.hash}",
+                source = "CollaborationEngine",
+                missionId = missionId,
+                correlationId = artifact.id
+            )
+            EmpireMissionControl.updatePlanStep(missionId, 3, "COMPLETED", "Auditable deliverable created")
+            EmpireMissionControl.updatePlanStep(missionId, 4, "WAITING_APPROVAL", "Owner review required")
             SovereignMemoryVault.record(
                 SovereignMemory(
                     partition = MemoryPartition.MISSION_SCOPED,
@@ -83,7 +104,7 @@ object CollaborationEngine {
                     content = reply
                 )
             )
-            EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive consultation produced analysis; human review required")
+            EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive deliverable ${artifact.id} created; human review required")
         }
     }
 

@@ -3,6 +3,10 @@ package com.shoshiluna.executive.core.engine
 import android.content.Context
 import com.shoshiluna.executive.core.agent.SovereignMemoryVault
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
+import com.shoshiluna.executive.core.business.ArtifactFactory
+import com.shoshiluna.executive.core.evolution.EvolutionEngine
+import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import com.shoshiluna.executive.core.business.BuiltInToolBootstrap
 import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
 import com.shoshiluna.executive.core.external.ExternalOperationJournal
@@ -37,6 +41,11 @@ object TitanEngine {
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        EmpireMissionControl.initialize(context)
+        ArtifactFactory.initialize(context)
+        EvolutionEngine.initialize(context)
+        HumanApprovalGateway.initialize(context)
+        BuiltInToolBootstrap.initialize()
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
@@ -47,6 +56,8 @@ object TitanEngine {
     fun setChatActive(active: Boolean) { 
         _isChatActive.value = active 
     }
+
+    fun applicationContext(): Context? = appContext
 
     fun reportLatency(latency: Long) {
         _networkLatency.value = latency
