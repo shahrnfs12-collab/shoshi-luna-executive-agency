@@ -24,6 +24,7 @@ import com.shoshiluna.executive.R
 import com.shoshiluna.executive.core.agent.*
 import com.shoshiluna.executive.core.audit.AuditTrail
 import com.shoshiluna.executive.core.business.EvidenceRegistry
+import com.shoshiluna.executive.core.business.ArtifactFactory
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.empire.MissionStatus
 import com.shoshiluna.executive.core.dream.ExecutiveBriefEngine
@@ -234,6 +235,19 @@ fun DreamCommandCenterScreen() {
                 if (recent.isEmpty()) Text("No audit events yet.", color = Color.Gray)
                 recent.forEach { audit ->
                     Text("• ${audit.action} → ${audit.result}", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        if (ArtifactFactory.artifacts.isNotEmpty()) {
+            item {
+                DreamGlassCard("DELIVERABLES • REAL OUTPUTS") {
+                    ArtifactFactory.artifacts.sortedByDescending { it.timestamp }.take(5).forEach { artifact ->
+                        Text("${artifact.type} • ${artifact.creatorAgentId}", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text(artifact.content.take(280), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                        Text("SHA-256 ${artifact.hash.take(16)}…", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                    }
                 }
             }
         }
