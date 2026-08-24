@@ -100,12 +100,12 @@ fun DreamCommandCenterScreen() {
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text("SHOSHI • LUNA", color = DreamGold, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                    Text("SUPER-AGENCY EXECUTIVE WORLD", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("עולם הסוכנות הניהולית", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
                         when {
-                            empire.emergencyHalt -> "GLOBAL STATUS • EMERGENCY HALT"
-                            aiReady -> "GLOBAL STATUS • OPERATIONAL"
-                            else -> "LOCAL CORE READY • AI NOT VERIFIED"
+                            empire.emergencyHalt -> "מצב כללי • עצירת חירום"
+                            aiReady -> "מצב כללי • פעיל"
+                            else -> "הליבה מוכנה • AI טרם אומת"
                         },
                         color = if (empire.emergencyHalt) DreamRed else if (aiReady) DreamGreen else DreamAmber,
                         style = MaterialTheme.typography.labelLarge,
@@ -135,12 +135,12 @@ fun DreamCommandCenterScreen() {
         }
 
         item {
-            Text("EXECUTIVE WEATHER", color = DreamGold, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
+            Text("תמונת מצב ניהולית", color = DreamGold, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DreamMetric("MISSIONS", activeMissions.toString(), if (activeMissions > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
-                DreamMetric("WAITING", waitingMissions.toString(), if (waitingMissions > 0) DreamAmber else Color.LightGray, Modifier.weight(1f))
-                DreamMetric("APPROVALS", pendingApprovals.toString(), if (pendingApprovals > 0) DreamAmber else DreamGreen, Modifier.weight(1f))
-                DreamMetric("COUNCIL", activeCouncil.toString(), if (activeCouncil > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
+                DreamMetric("משימות", activeMissions.toString(), if (activeMissions > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
+                DreamMetric("ממתינות", waitingMissions.toString(), if (waitingMissions > 0) DreamAmber else Color.LightGray, Modifier.weight(1f))
+                DreamMetric("אישורים", pendingApprovals.toString(), if (pendingApprovals > 0) DreamAmber else DreamGreen, Modifier.weight(1f))
+                DreamMetric("מועצה", activeCouncil.toString(), if (activeCouncil > 0) DreamGreen else Color.LightGray, Modifier.weight(1f))
             }
         }
 
@@ -195,7 +195,7 @@ fun DreamCommandCenterScreen() {
         }
 
         item {
-            DreamGlassCard("MISSION CONTROL • NOW") {
+            DreamGlassCard("בקרת משימות • עכשיו") {
                 if (empire.missions.isEmpty()) {
                     Text("אין משימות פעילות. פתחי צ׳אט ובקשי מ-SHOSHI או LUNA ליצור משימה.", color = Color.LightGray)
                 } else {
@@ -260,7 +260,7 @@ fun DreamCommandCenterScreen() {
         }
 
         item {
-            DreamGlassCard("EVOLUTION • VERIFIED LEARNING") {
+            DreamGlassCard("התפתחות • למידה מאומתת") {
                 if (learnings.isEmpty()) {
                     Text("אין עדיין לקחים מאומתים. למידה נוצרת רק מתוצאה עם ראיות.", color = Color.Gray)
                 } else {
