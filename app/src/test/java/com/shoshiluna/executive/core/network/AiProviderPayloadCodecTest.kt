@@ -19,4 +19,14 @@ class AiProviderPayloadCodecTest {
         assertEquals("r", AiProviderPayloadCodec.decodeText(AiProviderId.OPENROUTER, "{\"choices\":[{\"message\":{\"content\":\"r\"}}]}"))
         assertEquals("c", AiProviderPayloadCodec.decodeText(AiProviderId.CUSTOM, "{\"choices\":[{\"message\":{\"content\":\"c\"}}]}"))
     }
+
+    @Test fun `encodes real image input for every provider`() {
+        val image = AiImageInput("image/jpeg", "AQID", "photo.jpg")
+        AiProviderId.entries.forEach { provider ->
+            val model = if (provider == AiProviderId.CUSTOM) "custom" else AiProviderProtocols.forProvider(provider).defaultModel
+            val json = AiProviderPayloadCodec.encode(provider, model, null, "see", listOf(image))
+            assertTrue(json.contains("AQID"))
+            assertTrue(json.contains("image"))
+        }
+    }
 }
