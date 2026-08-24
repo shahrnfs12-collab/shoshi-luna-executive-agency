@@ -25,6 +25,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shoshiluna.executive.R
 import com.shoshiluna.executive.core.agent.ExecutiveAgent
 import com.shoshiluna.executive.core.network.AiConnectionState
+import com.shoshiluna.executive.core.network.AiProviderId
+import com.shoshiluna.executive.core.network.AiProviderRegistry
 import com.shoshiluna.executive.core.presentation.VoiceEngine
 import com.shoshiluna.executive.core.security.ApiKeyManager
 import com.shoshiluna.executive.core.voice.AndroidSpeechToTextEngine
@@ -44,7 +46,9 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     val sttState by stt.state.collectAsState()
     var input by remember { mutableStateOf("") }
     var apiKeyInput by remember { mutableStateOf("") }
-    var showApiSettings by remember { mutableStateOf(!ApiKeyManager.hasOpenAiKey(context)) }
+    var providerSelection by remember { mutableStateOf(ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI) }
+    var keyStatus by remember { mutableStateOf<String?>(null) }
+    var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
 
     fun beginListening() {
         VoiceEngine.stopSpeech()
@@ -111,9 +115,11 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 colors = CardDefaults.elevatedCardColors(containerColor = ChatPanel)
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("OpenAI connection", color = ChatGold, fontWeight = FontWeight.Bold)
+                    Text("חיבור ספקי AI", color = ChatGold, fontWeight = FontWeight.Bold)
                     Text(
-                        if (ApiKeyManager.hasOpenAiKey(context)) "Encrypted-at-rest API key is configured for local device testing." else "API key is missing. AI requests cannot run.",
+                        ApiKeyManager.configuredProviders(context).takeIf { it.isNotEmpty() }
+                            ?.joinToString(prefix = "מפתחות שמורים ומוצפנים: ") { it.name }
+                            ?: "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
                         color = Color.LightGray
                     )
                     Text(
@@ -121,27 +127,47 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         color = Color.Gray,
                         style = MaterialTheme.typography.bodySmall
                     )
+                    Text("בחרי ספק — הזיהוי האוטומטי יעדכן את הבחירה כשאפשר:", color = Color.LightGray)
+                    AiProviderId.entries.filter { it != AiProviderId.CUSTOM }.chunked(2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { provider ->
+                                FilterChip(
+                                    selected = providerSelection == provider,
+                                    onClick = { providerSelection = provider; keyStatus = null },
+                                    label = { Text(provider.name) }
+                                )
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         value = apiKeyInput,
-                        onValueChange = { apiKeyInput = it },
+                        onValueChange = { value ->
+                            apiKeyInput = value
+                            keyStatus = runCatching { AiProviderRegistry.detect(value) }.getOrNull()?.let { detected ->
+                                detected.provider?.also { providerSelection = it }
+                                if (detected.requiresUserSelection) "לא ניתן לזהות בוודאות — בחרי ספק" else "זוהה: ${detected.provider?.name}"
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("OpenAI API key") },
+                        label = { Text("API key") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation()
                     )
+                    keyStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             enabled = apiKeyInput.isNotBlank(),
                             onClick = {
-                                ApiKeyManager.saveOpenAiKey(context, apiKeyInput)
+                                ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
                                 apiKeyInput = ""
-                                showApiSettings = false
+                                keyStatus = "נשמר מוצפן עבור ${providerSelection.name}; החיבור יאומת בבקשה הבאה"
                             }
                         ) { Text("שמור מוצפן") }
                         OutlinedButton(onClick = {
-                            ApiKeyManager.clearOpenAiKey(context)
+                            ApiKeyManager.clearProviderKey(context, providerSelection)
                             apiKeyInput = ""
-                        }) { Text("מחק מפתח") }
+                            keyStatus = "המפתח של ${providerSelection.name} נמחק"
+                        }) { Text("מחק ספק נבחר") }
                     }
                 }
             }
