@@ -21,9 +21,11 @@ object TrustedExternalAgentRegistry {
     fun markTrusted(agentId: String, fingerprint: String?): ExternalAgentDescriptor {
         val current = _agents.value[agentId] ?: error("Unknown external agent")
         require(current.trustStatus != ExternalTrustStatus.REVOKED) { "Revoked agent cannot be trusted" }
+        val verifiedFingerprint = fingerprint?.trim().takeUnless { it.isNullOrBlank() }
+            ?: error("Verified handshake proof is required before trust")
         val updated = current.copy(
             trustStatus = ExternalTrustStatus.TRUSTED,
-            publicKeyFingerprint = fingerprint?.takeIf { it.isNotBlank() }
+            publicKeyFingerprint = verifiedFingerprint
         )
         _agents.value = _agents.value + (agentId to updated)
         return updated
