@@ -44,6 +44,13 @@ data class EmpireState(
 object EmpireMissionControl {
     private val _state = MutableStateFlow(EmpireState())
     val state: StateFlow<EmpireState> = _state.asStateFlow()
+    @Volatile private var store: EmpireMissionStore? = null
+
+    @Synchronized
+    fun initialize(context: android.content.Context) {
+        if (store != null) return
+        store = EmpireMissionStore(context).also { _state.value = it.load() }
+    }
 
     @Synchronized
     fun emergencyHalt() {
@@ -54,12 +61,14 @@ object EmpireMissionControl {
                 else mission.copy(status = MissionStatus.HALTED, updatedAt = System.currentTimeMillis())
             }
         )
+        persist()
         audit("SYSTEM", null, "EMERGENCY_HALT", "ACTIVATED")
     }
 
     @Synchronized
     fun releaseHalt() {
         _state.value = _state.value.copy(emergencyHalt = false)
+        persist()
         audit("SYSTEM", null, "EMERGENCY_HALT", "RELEASED")
     }
 
@@ -73,6 +82,7 @@ object EmpireMissionControl {
 
         val mission = EmpireMission(title = cleanTitle, ownerId = cleanOwner, environment = environment)
         _state.value = _state.value.copy(missions = listOf(mission) + _state.value.missions)
+        persist()
         audit(cleanOwner, mission.id, "MISSION_CREATED", "${mission.status}; environment=${mission.environment}")
         return mission
     }
@@ -103,6 +113,7 @@ object EmpireMissionControl {
             }
         )
         require(found) { "Unknown missionId: $missionId" }
+        persist()
         audit(owner, missionId, "MISSION_STATUS", "$nextStatus; reason=${reason.trim()}")
     }
 
@@ -131,6 +142,7 @@ object EmpireMissionControl {
             }
         )
         require(found) { "Unknown missionId: $missionId" }
+        persist()
         audit(owner, missionId, "MISSION_WAITING", "$status; condition=${condition.trim()}")
     }
 
@@ -149,6 +161,8 @@ object EmpireMissionControl {
             )
         )
     }
+
+    private fun persist() { store?.save(_state.value) }
 
     private val waitingStatuses = setOf(
         MissionStatus.WAITING,
