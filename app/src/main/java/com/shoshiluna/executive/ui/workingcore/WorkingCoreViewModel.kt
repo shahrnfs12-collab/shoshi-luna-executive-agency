@@ -61,8 +61,13 @@ class WorkingCoreViewModel(
         if (clean.isBlank() || _uiState.value.isSending) return
         val agent = _uiState.value.selectedAgent
         val attachmentLabel = attachments.takeIf { it.isNotEmpty() }?.joinToString(
-            prefix = "\n\nמצורפים שנבדקו: ", separator = ", "
-        ) { "${it.displayName} (${it.mimeType}, ${it.sizeBytes} bytes)" }.orEmpty()
+            prefix = "\n\nמצורפים שנבדקו:\n", separator = "\n\n"
+        ) {
+            buildString {
+                append("- ${it.displayName} (${it.mimeType}, ${it.sizeBytes} bytes)")
+                it.safeTextPreview?.let { preview -> append("\n--- תוכן בטוח לניתוח ---\n").append(preview) }
+            }
+        }.orEmpty()
         val visiblePrompt = clean + attachmentLabel
         val userMessage = WorkingCoreMessage(agent = agent, fromUser = true, text = visiblePrompt)
 
