@@ -69,7 +69,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var keyStatus by remember { mutableStateOf<String?>(null) }
     var customEndpoint by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
-    var localEndpoint by remember { mutableStateOf("http://10.0.2.2:11434/v1/chat/completions") }
+    var localEndpoint by remember { mutableStateOf("") }
     var localModel by remember { mutableStateOf("llama3.2") }
     var providerHealth by remember { mutableStateOf<Map<AiProviderId, String>>(emptyMap()) }
     var testingAllProviders by remember { mutableStateOf(false) }
@@ -259,13 +259,8 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                     }
                     if (providerSelection == AiProviderId.LOCAL_OPENAI) {
                         Text("מנוע מקומי ללא מפתח", color = ChatGold, fontWeight = FontWeight.Bold)
-                        Text("נתמך: Ollama, LM Studio ו־llama.cpp. HTTP מותר רק למכשיר עצמו/אמולטור; חיבור רשת דורש HTTPS.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AssistChip(onClick = { localEndpoint = "http://10.0.2.2:11434/v1/chat/completions" }, label = { Text("Ollama") })
-                            AssistChip(onClick = { localEndpoint = "http://10.0.2.2:1234/v1/chat/completions" }, label = { Text("LM Studio") })
-                            AssistChip(onClick = { localEndpoint = "http://10.0.2.2:8080/v1/chat/completions" }, label = { Text("llama.cpp") })
-                        }
-                        OutlinedTextField(localEndpoint, { localEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת שרת מקומי") }, singleLine = true)
+                        Text("נתמך: Ollama (פורט 11434), LM Studio (פורט 1234) ו־llama.cpp (פורט 8080). מטעמי אבטחה יש לחשוף את השרת דרך כתובת HTTPS מאובטחת.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(localEndpoint, { localEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת HTTPS של השרת המקומי") }, singleLine = true)
                         OutlinedTextField(localModel, { localModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל מקומי") }, singleLine = true)
                     } else OutlinedTextField(
                         value = apiKeyInput,
