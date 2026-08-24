@@ -9,6 +9,10 @@ pass(){ echo "STRICT GATE PASS: $*"; }
 [[ -f app/src/main/res/drawable/shoshi_executive.png ]] || fail "SHOSHI 2D production visual missing"
 [[ -f app/src/main/res/drawable/luna_executive.png ]] || fail "LUNA 2D production visual missing"
 [[ -f app/src/main/res/drawable/command_center.png ]] || fail "2D command-center master visual missing"
+[[ -s app/src/main/assets/models/shoshi.glb ]] || fail "SHOSHI GLB missing"
+[[ -s app/src/main/assets/models/luna.glb ]] || fail "LUNA GLB missing"
+[[ $(stat -c%s app/src/main/assets/models/shoshi.glb) -ge 102400 ]] || fail "SHOSHI GLB below production threshold"
+[[ $(stat -c%s app/src/main/assets/models/luna.glb) -ge 102400 ]] || fail "LUNA GLB below production threshold"
 
 if grep -RInE 'SIMULATED_OUTPUT|Executive Response to|Future: Integrate with a real user approval system|TODO|FIXME|NotImplementedException' app/src/main/java --include='*.kt'; then
   fail "placeholder/fake-success marker found in production code"
@@ -21,8 +25,8 @@ APK=app/build/outputs/apk/debug/app-debug.apk
 [[ -s "$APK" ]] || fail "debug APK not produced"
 pass "Gradle tests + lint + assembleDebug"
 
-# Phase 6 production presentation is 2D. 3D/GLB is deliberately deferred and must not block this gate.
-unzip -l "$APK" | grep -q 'res/drawable.*/shoshi_executive' || true
-pass "2D production UI gate; 3D assets deferred"
+unzip -l "$APK" | grep -q 'assets/models/shoshi.glb' || fail "SHOSHI GLB not packaged in APK"
+unzip -l "$APK" | grep -q 'assets/models/luna.glb' || fail "LUNA GLB not packaged in APK"
+pass "2D master visuals and 3D executive assets packaged"
 
 echo "STRICT_ACCEPTANCE_GATE=PASS"
