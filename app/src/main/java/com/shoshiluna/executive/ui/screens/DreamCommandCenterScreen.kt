@@ -30,6 +30,8 @@ import com.shoshiluna.executive.core.dream.ExecutiveBriefEngine
 import com.shoshiluna.executive.core.external.TrustedExternalAgentRegistry
 import com.shoshiluna.executive.core.health.RuntimeReadiness
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import com.shoshiluna.executive.core.evolution.EvolutionEngine
+import com.shoshiluna.executive.core.evolution.LearningStatus
 import kotlin.math.roundToInt
 
 private val DreamGold = Color(0xFFE2C06B)
@@ -49,6 +51,7 @@ fun DreamCommandCenterScreen() {
     val evidence by EvidenceRegistry.items.collectAsState()
     val externalAgents by TrustedExternalAgentRegistry.agents.collectAsState()
     val reputations by AgentReputationEngine.reputations.collectAsState()
+    val learnings by EvolutionEngine.learnings.collectAsState()
     val readiness = remember { RuntimeReadiness.inspect(context) }
 
     val activeMissions = empire.missions.count { it.status !in terminalMissionStatuses }
@@ -225,6 +228,33 @@ fun DreamCommandCenterScreen() {
                 if (recent.isEmpty()) Text("No audit events yet.", color = Color.Gray)
                 recent.forEach { audit ->
                     Text("• ${audit.action} → ${audit.result}", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        item {
+            DreamGlassCard("EVOLUTION • VERIFIED LEARNING") {
+                if (learnings.isEmpty()) {
+                    Text("אין עדיין לקחים מאומתים. למידה נוצרת רק מתוצאה עם ראיות.", color = Color.Gray)
+                } else {
+                    learnings.values.sortedByDescending { it.createdAt }.take(6).forEach { learning ->
+                        Text(learning.lesson, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("${learning.status} • ראיות ${learning.evidenceIds.size}", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                        when (learning.status) {
+                            LearningStatus.PROPOSED -> OutlinedButton(onClick = {
+                                EvolutionEngine.requestActivation(learning.id, ExecutiveAgent.SHOSHI.id)
+                            }) { Text("בקשי אישור להפעלת הלקח") }
+                            LearningStatus.AWAITING_APPROVAL -> {
+                                val approved = learning.approvalRequestId?.let(HumanApprovalGateway::isApproved) == true
+                                if (approved) Button(onClick = { EvolutionEngine.finalizeActivation(learning.id) }) {
+                                    Text("הפעילי לקח שאושר")
+                                } else Text("ממתין להחלטת בעלים", color = DreamAmber)
+                            }
+                            LearningStatus.ACTIVE -> Text("פעיל ומשפיע על עבודה עתידית", color = DreamGreen)
+                            LearningStatus.REJECTED -> Text("נדחה", color = DreamRed)
+                        }
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                    }
                 }
             }
         }
