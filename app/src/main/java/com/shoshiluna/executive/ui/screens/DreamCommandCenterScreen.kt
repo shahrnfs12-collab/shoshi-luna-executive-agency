@@ -109,14 +109,14 @@ fun DreamCommandCenterScreen() {
                     name = "SHOSHI",
                     role = "Growth • Strategy • Orchestration",
                     image = R.drawable.shoshi_executive,
-                    score = reputations[ExecutiveAgent.SHOSHI.id]?.let { AgentReputationEngine.getScore(it.agentId) } ?: 1f,
+                    score = reputations[ExecutiveAgent.SHOSHI.id]?.takeIf { it.totalTasks > 0 }?.let { AgentReputationEngine.getScore(it.agentId) },
                     modifier = Modifier.weight(1f)
                 )
                 DreamAgentCard(
                     name = "LUNA",
                     role = "Partnerships • Operations • Challenge",
                     image = R.drawable.luna_executive,
-                    score = reputations[ExecutiveAgent.LUNA.id]?.let { AgentReputationEngine.getScore(it.agentId) } ?: 1f,
+                    score = reputations[ExecutiveAgent.LUNA.id]?.takeIf { it.totalTasks > 0 }?.let { AgentReputationEngine.getScore(it.agentId) },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -233,14 +233,18 @@ fun DreamCommandCenterScreen() {
 }
 
 @Composable
-private fun DreamAgentCard(name: String, role: String, image: Int, score: Float, modifier: Modifier = Modifier) {
+private fun DreamAgentCard(name: String, role: String, image: Int, score: Float?, modifier: Modifier = Modifier) {
     ElevatedCard(modifier, colors = CardDefaults.elevatedCardColors(containerColor = DreamGlass), shape = RoundedCornerShape(22.dp)) {
         Column {
             Image(painterResource(image), name, Modifier.fillMaxWidth().height(235.dp), contentScale = ContentScale.Crop)
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(name, color = DreamGold, fontWeight = FontWeight.Black)
                 Text(role, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
-                Text("Reliability ${(score.coerceIn(0f, 1f) * 100).roundToInt()}%", color = DreamGreen, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    score?.let { "Reliability ${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "Reliability: טרם נמדד",
+                    color = if (score == null) Color.Gray else DreamGreen,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
     }
