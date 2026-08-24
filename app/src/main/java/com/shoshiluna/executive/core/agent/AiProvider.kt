@@ -2,7 +2,8 @@ package com.shoshiluna.executive.core.agent
 
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.ChatMessage
-import com.shoshiluna.executive.core.network.OpenAiClient
+import com.shoshiluna.executive.core.network.ResilientAiClient
+import com.shoshiluna.executive.core.engine.TitanEngine
 
 
 class AiProviderException(
@@ -98,6 +99,8 @@ class OpenAiProvider : AiProvider {
             if (memoryContext.isNotBlank()) add(ChatMessage("system", "Relevant agency memory:\n$memoryContext"))
             add(ChatMessage("user", prompt))
         }
-        return OpenAiClient.getCompletionResult(messages, AgentModelPolicy.modelFor(agent))
+        val context = TitanEngine.applicationContext()
+            ?: return AiCallResult.Failure(com.shoshiluna.executive.core.network.AiConnectionState.OFFLINE, "AI runtime is not initialized.")
+        return ResilientAiClient.getCompletionResult(context, messages, AgentModelPolicy.modelFor(agent))
     }
 }
