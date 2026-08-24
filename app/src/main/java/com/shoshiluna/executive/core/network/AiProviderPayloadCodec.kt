@@ -34,7 +34,7 @@ object AiProviderPayloadCodec {
                     images.forEach { add(mapOf("inline_data" to mapOf("mime_type" to it.mimeType, "data" to it.base64))) }
                 })))
             }
-            AiProviderId.OPENROUTER, AiProviderId.CUSTOM -> mapOf(
+            AiProviderId.OPENROUTER, AiProviderId.LOCAL_OPENAI, AiProviderId.CUSTOM -> mapOf(
                 "model" to model,
                 "messages" to buildList {
                     if (!instructions.isNullOrBlank()) add(mapOf("role" to "system", "content" to instructions))
@@ -60,7 +60,7 @@ object AiProviderPayloadCodec {
             AiProviderId.GOOGLE_GEMINI -> root.getAsJsonArray("candidates")?.firstOrNull()?.asJsonObject
                 ?.getAsJsonObject("content")?.getAsJsonArray("parts")?.mapNotNull { it.asJsonObject.get("text")?.asString }
                 ?.joinToString("\n").orEmpty()
-            AiProviderId.OPENROUTER, AiProviderId.CUSTOM -> root.getAsJsonArray("choices")?.firstOrNull()?.asJsonObject
+            AiProviderId.OPENROUTER, AiProviderId.LOCAL_OPENAI, AiProviderId.CUSTOM -> root.getAsJsonArray("choices")?.firstOrNull()?.asJsonObject
                 ?.getAsJsonObject("message")?.get("content")?.asString.orEmpty()
         }.trim()
     }
