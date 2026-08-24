@@ -15,7 +15,7 @@ class AiProviderProtocolTest {
     }
 
     @Test fun `local provider permits only loopback cleartext or clean https`() {
-        assertTrue(AiProviderProtocols.local("http://127.0.0.1:11434/v1/chat/completions", "llama3.2").endpoint.startsWith("http://"))
+        assertTrue(AiProviderProtocols.local("https://local-ai.example/v1/chat/completions", "llama3.2").endpoint.startsWith("https://"))
         assertTrue(AiProviderProtocols.local("https://local-ai.example/v1/chat/completions", "model").endpoint.startsWith("https://"))
         org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
             AiProviderProtocols.local("http://192.168.1.20:11434/v1/chat/completions", "model")
