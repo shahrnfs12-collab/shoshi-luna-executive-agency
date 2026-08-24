@@ -3,6 +3,7 @@ package com.shoshiluna.executive.core.agent
 import com.shoshiluna.executive.core.empire.EmpireMission
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.empire.MissionStatus
+import com.shoshiluna.executive.core.engine.TitanEngine
 
 data class MissionWorkItem(
     val order: Int,
@@ -41,12 +42,12 @@ object AutonomousMissionEngine {
         EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Bounded autonomous analysis started")
         EmpireMissionControl.updatePlanStep(mission.id, 1, "COMPLETED", "Goal and success criteria captured")
         EmpireMissionControl.updatePlanStep(mission.id, 2, "RUNNING", "Counterpart review started")
-        CollaborationEngine.startConsultation(
-            missionId = mission.id,
-            initiatorId = requestedOwner.id,
-            targetId = counterpart.id,
-            topic = cleanGoal
-        )
+        val appContext = TitanEngine.applicationContext()
+        if (appContext != null) {
+            MissionContinuationWorker.schedule(appContext, mission.id, requestedOwner.id, counterpart.id, cleanGoal)
+        } else {
+            CollaborationEngine.startConsultation(mission.id, requestedOwner.id, counterpart.id, cleanGoal)
+        }
         return AutonomousMissionReceipt(
             mission = EmpireMissionControl.state.value.missions.first { it.id == mission.id },
             plan = plan

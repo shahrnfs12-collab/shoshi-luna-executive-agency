@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shoshiluna.executive.core.business.*
+import com.shoshiluna.executive.core.fabric.AgencyGrowthAutopilot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -18,11 +19,15 @@ fun BusinessCommandScreen() {
     val revenueRecords by RevenueLedger.records.collectAsState()
     val allocatedBalance by TreasuryLedger.totalAllocatedBalance.collectAsState(0.0)
     val fundedBalance by TreasuryLedger.totalFundedBalance.collectAsState(0.0)
+    val allocations by TreasuryLedger.allocations.collectAsState()
+    val spendProposals by TreasuryLedger.spendProposals.collectAsState()
+    val growthNeeds by AgencyGrowthAutopilot.needs.collectAsState()
+    val availableGrowth = remember(allocations, spendProposals) { TreasuryLedger.availableFundedBalance() }
     
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("BUSINESS ENGINE", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold) },
+                title = { Text("המנוע העסקי", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Black)
             )
         },
@@ -39,13 +44,16 @@ fun BusinessCommandScreen() {
                 TreasurySummary(allocatedBalance, fundedBalance)
             }
             item {
-                Text("REVENUE LEDGER", color = Color(0xFFD8B45A), style = MaterialTheme.typography.titleMedium)
+                AiGrowthFundCard(availableGrowth, growthNeeds.size, spendProposals)
+            }
+            item {
+                Text("יומן הכנסות", color = Color(0xFFD8B45A), style = MaterialTheme.typography.titleMedium)
             }
             items(revenueRecords) { record ->
                 RevenueCard(record)
             }
             item {
-                Text("BUSINESS PIPELINE", color = Color(0xFFD8B45A), style = MaterialTheme.typography.titleMedium)
+                Text("צנרת עסקית", color = Color(0xFFD8B45A), style = MaterialTheme.typography.titleMedium)
             }
             item {
                 PipelineSummary(kpis)
@@ -55,8 +63,37 @@ fun BusinessCommandScreen() {
                     onClick = { BusinessSimulationManager.runFullCycleSimulation("Growth Strategy") },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("RUN BUSINESS SIMULATION")
+                    Text("הפעלת תרחיש הדגמה בלבד")
                 }
+                Text("הפעולה יוצרת נתוני SIMULATION בלבד ואינה מייצגת לקוחות, הכנסה או כסף אמיתי.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiGrowthFundCard(available: Double, waitingNeeds: Int, proposals: List<TreasurySpendProposal>) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("קרן צמיחת AI • 5%", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
+            KpiRow("זמין לרכישות", "$${"%.2f".format(available)}", if (available > 0) Color.Green else Color.Gray)
+            KpiRow("צרכים שמחכים להכנסה", waitingNeeds.toString(), Color.Cyan)
+            KpiRow("הצעות רכישה", proposals.size.toString(), Color.Yellow)
+            Text("רכישה נפתחת רק מרווח אמיתי שהתקבל, אומת והועבר לקרן FUNDED.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+            proposals.takeLast(5).reversed().forEach { proposal ->
+                HorizontalDivider(color = Color.DarkGray)
+                Text(proposal.description, color = Color.White, style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("$${"%.2f".format(proposal.amount)}", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(proposal.status.name, color = when (proposal.status) {
+                        SpendStatus.VERIFIED -> Color.Green
+                        SpendStatus.REJECTED -> Color.Red
+                        else -> Color.Yellow
+                    })
+                }
+            }
+            if (proposals.any { it.status == SpendStatus.PROPOSED }) {
+                Text("ממתין לאישור שלך במרכז הבקרה. אישור רגיל אינו מחייב; תשלום אמיתי דורש גם אימות ביומטרי.", color = Color(0xFFD8B45A), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -69,11 +106,11 @@ fun TreasurySummary(allocated: Double, funded: Double) {
         colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("AGENCY TREASURY", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
-            KpiRow("ALLOCATED (5% Reserve)", "$${allocated}", Color.Yellow)
-            KpiRow("FUNDED (Verified Real)", "$${funded}", Color.Green)
+            Text("קופת הסוכנות", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
+            KpiRow("מוקצה — עתודה של 5%", "$${allocated}", Color.Yellow)
+            KpiRow("ממומן — כסף אמיתי מאומת", "$${funded}", Color.Green)
             Text(
-                "Note: Allocated funds are accounting reserves. Funded funds are verified physical balances.",
+                "כסף מוקצה הוא רישום חשבונאי בלבד. כסף ממומן הוא יתרה אמיתית שעברה אימות.",
                 color = Color.Gray,
                 style = MaterialTheme.typography.labelSmall
             )
@@ -88,14 +125,14 @@ fun KpiDashboard(kpis: BusinessKpis) {
         colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("AGENCY KPIs", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
-            KpiRow("REAL REVENUE (VERIFIED)", "$${kpis.realReceivedRevenue}", Color.Green)
-            KpiRow("VERIFIED COSTS", "$${kpis.verifiedCosts}", Color.Red)
-            KpiRow("VERIFIED NET RESULT", "$${kpis.verifiedNetResult}", if (kpis.verifiedNetResult >= 0) Color.Green else Color.Red)
+            Text("מדדי הסוכנות", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
+            KpiRow("הכנסה אמיתית מאומתת", "$${kpis.realReceivedRevenue}", Color.Green)
+            KpiRow("עלויות מאומתות", "$${kpis.verifiedCosts}", Color.Red)
+            KpiRow("תוצאה נטו מאומתת", "$${kpis.verifiedNetResult}", if (kpis.verifiedNetResult >= 0) Color.Green else Color.Red)
             HorizontalDivider(color = Color.DarkGray)
-            KpiRow("ACTIVE MISSIONS", kpis.activeMissions.toString(), Color.White)
-            KpiRow("VALIDATED OPPS", kpis.validatedOpportunities.toString(), Color.Cyan)
-            KpiRow("CONV RATE", "${(kpis.conversionRate * 100).toInt()}%", Color.White)
+            KpiRow("משימות פעילות", kpis.activeMissions.toString(), Color.White)
+            KpiRow("הזדמנויות מאומתות", kpis.validatedOpportunities.toString(), Color.Cyan)
+            KpiRow("שיעור המרה", "${(kpis.conversionRate * 100).toInt()}%", Color.White)
         }
     }
 }
@@ -107,13 +144,13 @@ fun PipelineSummary(kpis: BusinessKpis) {
         colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            KpiRow("PIPELINE VALUE", "$${kpis.pipelineValue}", Color.Cyan)
-            KpiRow("CONTRACTED", "$${kpis.contractedValue}", Color.Yellow)
-            KpiRow("INVOICED", "$${kpis.invoicedValue}", Color.White)
-            KpiRow("TOTAL LEADS", kpis.totalLeads.toString(), Color.White)
-            KpiRow("QUALIFIED LEADS", kpis.qualifiedLeads.toString(), Color.Cyan)
-            KpiRow("PROPOSALS", kpis.proposals.toString(), Color.White)
-            KpiRow("RESPONSE RATE", "${(kpis.responseRate * 100).toInt()}%", Color.White)
+            KpiRow("שווי הצנרת", "$${kpis.pipelineValue}", Color.Cyan)
+            KpiRow("התקשרויות", "$${kpis.contractedValue}", Color.Yellow)
+            KpiRow("הופקו חשבוניות", "$${kpis.invoicedValue}", Color.White)
+            KpiRow("לידים", kpis.totalLeads.toString(), Color.White)
+            KpiRow("לידים מוסמכים", kpis.qualifiedLeads.toString(), Color.Cyan)
+            KpiRow("הצעות", kpis.proposals.toString(), Color.White)
+            KpiRow("שיעור מענה", "${(kpis.responseRate * 100).toInt()}%", Color.White)
         }
     }
 }

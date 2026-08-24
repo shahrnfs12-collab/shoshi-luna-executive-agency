@@ -1,10 +1,16 @@
 package com.shoshiluna.executive.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,14 +19,18 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shoshiluna.executive.R
+import com.shoshiluna.executive.BuildConfig
 import com.shoshiluna.executive.core.agent.*
 import com.shoshiluna.executive.core.audit.AuditTrail
 import com.shoshiluna.executive.core.business.EvidenceRegistry
@@ -35,6 +45,8 @@ import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import com.shoshiluna.executive.core.evolution.EvolutionEngine
 import com.shoshiluna.executive.core.evolution.LearningStatus
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import android.graphics.BitmapFactory
 
 private val DreamGold = Color(0xFFE2C06B)
 private val DreamInk = Color(0xFF050608)
@@ -43,9 +55,24 @@ private val DreamGreen = Color(0xFF70E1A1)
 private val DreamAmber = Color(0xFFFFC866)
 private val DreamRed = Color(0xFFFF7A7A)
 
+internal object ExecutiveCarouselGeometry {
+    const val CONTAINER_HEIGHT = 740
+    const val PANEL_HEIGHT = 420
+    const val PORTRAIT_HEIGHT = 225
+    const val PORTRAIT_BOTTOM = 82
+    const val BUTTON_HEIGHT = 58
+    const val BUTTON_BOTTOM = 18
+
+    val portraitTop get() = CONTAINER_HEIGHT - PORTRAIT_BOTTOM - PORTRAIT_HEIGHT
+    val portraitBottom get() = CONTAINER_HEIGHT - PORTRAIT_BOTTOM
+    val buttonTop get() = CONTAINER_HEIGHT - BUTTON_BOTTOM - BUTTON_HEIGHT
+}
+
 @Composable
 fun DreamCommandCenterScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     val empire by EmpireMissionControl.state.collectAsState()
     val council by CouncilEngine.sessions.collectAsState()
     val approvals by HumanApprovalGateway.requests.collectAsState()
@@ -76,6 +103,7 @@ fun DreamCommandCenterScreen() {
     }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xFF17120B), DreamInk, Color.Black))),
@@ -100,7 +128,7 @@ fun DreamCommandCenterScreen() {
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text("SHOSHI • LUNA", color = DreamGold, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                    Text("עולם הסוכנות הניהולית", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("עולם הסוכנות הניהולית • v${BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(
                         when {
                             empire.emergencyHalt -> "מצב כללי • עצירת חירום"
@@ -113,6 +141,24 @@ fun DreamCommandCenterScreen() {
                     )
                 }
             }
+        }
+
+        item {
+            ExecutiveVisionCarousel(
+                activeMissions = activeMissions,
+                pendingApprovals = pendingApprovals,
+                verifiedEvidence = verifiedEvidence,
+                connectedTools = registeredTools.count { ToolGateway.hasRuntimeAdapter(it.id) },
+                onOpen = { page ->
+                    val target = when (page) {
+                        0 -> 7 // missions
+                        1 -> 4 // executive brief
+                        2 -> 6 // approvals/network
+                        else -> 8 // evidence
+                    }
+                    scope.launch { listState.animateScrollToItem(target) }
+                }
+            )
         }
 
         item {
@@ -148,14 +194,14 @@ fun DreamCommandCenterScreen() {
             DreamGlassCard("EXECUTIVE BRIEF • NOW") {
                 Text(brief.headline, color = Color.White, fontWeight = FontWeight.Bold)
                 if (brief.priorities.isNotEmpty()) {
-                    Text("Priorities", color = DreamGold, style = MaterialTheme.typography.labelLarge)
+                    Text("סדרי עדיפות", color = DreamGold, style = MaterialTheme.typography.labelLarge)
                     brief.priorities.forEach { Text("• $it", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
                 }
                 if (brief.risks.isNotEmpty()) {
-                    Text("Risks / Blocks", color = DreamAmber, style = MaterialTheme.typography.labelLarge)
+                    Text("סיכונים וחסמים", color = DreamAmber, style = MaterialTheme.typography.labelLarge)
                     brief.risks.forEach { Text("• $it", color = Color.LightGray, style = MaterialTheme.typography.bodySmall) }
                 }
-                Text("Next best action", color = DreamGold, style = MaterialTheme.typography.labelLarge)
+                Text("הפעולה הבאה המומלצת", color = DreamGold, style = MaterialTheme.typography.labelLarge)
                 Text(brief.nextBestAction, color = DreamGreen, fontWeight = FontWeight.SemiBold)
             }
         }
@@ -238,10 +284,10 @@ fun DreamCommandCenterScreen() {
 
         item {
             DreamGlassCard("TRUST & EVIDENCE") {
-                Text("Every external action, sensitive decision and verified result must leave an evidence/audit trail.", color = Color.LightGray)
+                Text("כל פעולה חיצונית, החלטה רגישה ותוצאה מאומתת חייבות להישמר בשרשרת הראיות.", color = Color.LightGray)
                 Spacer(Modifier.height(8.dp))
                 val recent = remember(evidence.size, empire.missions.size, approvals.size) { AuditTrail.recent(5) }
-                if (recent.isEmpty()) Text("No audit events yet.", color = Color.Gray)
+                if (recent.isEmpty()) Text("אין עדיין אירועי ביקורת.", color = Color.Gray)
                 recent.forEach { audit ->
                     Text("• ${audit.action} → ${audit.result}", color = Color.White, style = MaterialTheme.typography.bodySmall)
                 }
@@ -304,9 +350,169 @@ fun DreamCommandCenterScreen() {
                 ) {
                     Icon(if (empire.emergencyHalt) Icons.Default.PlayArrow else Icons.Default.StopCircle, null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if (empire.emergencyHalt) "RELEASE HALT" else "EMERGENCY HALT")
+                    Text(if (empire.emergencyHalt) "שחרור עצירה" else "עצירת חירום")
                 }
             }
+        }
+    }
+}
+
+private data class CarouselPanel(
+    val title: String,
+    val subtitle: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val value: String,
+    val rows: List<String>
+)
+
+@Composable
+private fun ExecutiveVisionCarousel(
+    activeMissions: Int,
+    pendingApprovals: Int,
+    verifiedEvidence: Int,
+    connectedTools: Int,
+    onOpen: (Int) -> Unit
+) {
+    val panels = listOf(
+        CarouselPanel("פרויקטים", "תכנון, חלוקה ומעקב", Icons.Default.Workspaces, "$activeMissions פעילים", listOf("פיתוח עסקי", "מחקר ואסטרטגיה", "קמפיינים ושיווק")),
+        CarouselPanel("תדריך מנהלים", "הפעולה הטובה הבאה", Icons.Default.Insights, "עכשיו", listOf("סדרי עדיפויות", "סיכונים וחסמים", "החלטה מוצעת")),
+        CarouselPanel("אישורים וכלים", "שליטה לפני פעולה", Icons.Default.AdminPanelSettings, "$pendingApprovals ממתינים", listOf("$connectedTools כלים מחוברים", "חומת אישורים", "עצירת חירום")),
+        CarouselPanel("ראיות ודוחות", "תוצאות שאפשר לבדוק", Icons.Default.FactCheck, "$verifiedEvidence מאומתים", listOf("תוצרים", "יומן ביקורת", "למידה מאושרת"))
+    )
+    val pagerState = rememberPagerState(pageCount = { panels.size })
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("מרכז השליטה", color = DreamGold, fontWeight = FontWeight.Black)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(ExecutiveCarouselGeometry.CONTAINER_HEIGHT.dp)
+                .clip(RoundedCornerShape(34.dp))
+                .background(Brush.radialGradient(listOf(Color(0x55351E06), Color.Black)))
+        ) {
+            Image(
+                painterResource(R.drawable.command_center),
+                null,
+                Modifier.fillMaxSize().alpha(0.22f),
+                contentScale = ContentScale.Crop
+            )
+            HorizontalPager(
+                state = pagerState,
+                contentPadding = PaddingValues(horizontal = 42.dp),
+                pageSpacing = 14.dp,
+                modifier = Modifier.fillMaxWidth().height(ExecutiveCarouselGeometry.PANEL_HEIGHT.dp).zIndex(1f)
+            ) { page ->
+                val panel = panels[page]
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp)
+                        .background(
+                            Brush.verticalGradient(listOf(Color(0xE636220C), Color(0xF20A0B0E))),
+                            RoundedCornerShape(topStart = 52.dp, topEnd = 52.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+                        )
+                        .border(1.5.dp, DreamGold.copy(alpha = 0.85f), RoundedCornerShape(topStart = 52.dp, topEnd = 52.dp, bottomStart = 28.dp, bottomEnd = 28.dp))
+                        .clickable { onOpen(page) }
+                        .padding(horizontal = 22.dp, vertical = 22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Icon(panel.icon, null, tint = DreamGold, modifier = Modifier.size(34.dp))
+                    Text(panel.title, color = DreamGold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                    Text(panel.subtitle, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                    Surface(color = DreamGold.copy(alpha = 0.12f), shape = RoundedCornerShape(50)) {
+                        Text(panel.value, color = DreamGreen, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                    }
+                    panel.rows.forEach { row ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ChevronLeft, null, tint = DreamGold, modifier = Modifier.size(16.dp))
+                            Text(row, color = Color.White, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+            CarouselExecutivePortrait(
+                name = "SHOSHI",
+                resourceId = R.drawable.shoshi_executive,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 18.dp, bottom = ExecutiveCarouselGeometry.PORTRAIT_BOTTOM.dp).zIndex(2f)
+            )
+            CarouselExecutivePortrait(
+                name = "LUNA",
+                resourceId = R.drawable.luna_executive,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = ExecutiveCarouselGeometry.PORTRAIT_BOTTOM.dp).zIndex(2f)
+            )
+            Button(
+                onClick = { onOpen(pagerState.currentPage) },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = ExecutiveCarouselGeometry.BUTTON_BOTTOM.dp).width(236.dp).height(ExecutiveCarouselGeometry.BUTTON_HEIGHT.dp).zIndex(3f),
+                colors = ButtonDefaults.buttonColors(containerColor = DreamGold),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, Color(0xFFFFDB86))
+            ) {
+                Text("פתחי מסך", color = Color.Black, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            panels.indices.forEach { index ->
+                Box(
+                    Modifier
+                        .size(if (pagerState.currentPage == index) 10.dp else 8.dp)
+                        .background(if (pagerState.currentPage == index) DreamGold else Color.Gray, RoundedCornerShape(50))
+                )
+            }
+        }
+        Text("החליקי לצדדים לבחירת מסך", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun CarouselExecutivePortrait(name: String, resourceId: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .width(112.dp)
+            .height(ExecutiveCarouselGeometry.PORTRAIT_HEIGHT.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color(0xEE08090C))
+            .border(1.5.dp, DreamGold.copy(alpha = 0.9f), RoundedCornerShape(22.dp))
+    ) {
+        SafeRasterExecutive(resourceId, name, Modifier.fillMaxSize(), ContentScale.Crop)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .align(Alignment.BottomCenter)
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xF0000000))))
+        )
+        Text(
+            name,
+            color = DreamGold,
+            fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp)
+        )
+    }
+}
+
+@Composable
+private fun SafeRasterExecutive(resourceId: Int, description: String, modifier: Modifier, contentScale: ContentScale = ContentScale.Fit) {
+    val context = LocalContext.current
+    val bitmap = remember(resourceId) {
+        runCatching {
+            // Full-size executive PNGs are far larger than their on-screen target. Decoding both
+            // at source size can make the second agent silently fail on memory-constrained phones.
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = 2
+                inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+            }
+            context.resources.openRawResource(resourceId).use { stream ->
+                requireNotNull(BitmapFactory.decodeStream(stream, null, options))
+            }
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(bitmap.asImageBitmap(), description, modifier, contentScale = contentScale)
+    } else {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Person, description, tint = DreamGold.copy(alpha = 0.65f), modifier = Modifier.size(72.dp))
         }
     }
 }
@@ -315,12 +521,12 @@ fun DreamCommandCenterScreen() {
 private fun DreamAgentCard(name: String, role: String, image: Int, score: Float?, modifier: Modifier = Modifier) {
     ElevatedCard(modifier, colors = CardDefaults.elevatedCardColors(containerColor = DreamGlass), shape = RoundedCornerShape(22.dp)) {
         Column {
-            Image(painterResource(image), name, Modifier.fillMaxWidth().height(235.dp), contentScale = ContentScale.Crop)
+            SafeRasterExecutive(image, name, Modifier.fillMaxWidth().height(235.dp), ContentScale.Crop)
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(name, color = DreamGold, fontWeight = FontWeight.Black)
                 Text(role, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
                 Text(
-                    score?.let { "Reliability ${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "Reliability: טרם נמדד",
+                    score?.let { "אמינות ${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "אמינות: טרם נמדדה",
                     color = if (score == null) Color.Gray else DreamGreen,
                     style = MaterialTheme.typography.labelSmall
                 )

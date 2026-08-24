@@ -20,6 +20,8 @@ object ApiKeyManager {
     private const val KEY_CUSTOM_MODEL = "CUSTOM_MODEL"
     private const val KEY_CUSTOM_AUTH_HEADER = "CUSTOM_AUTH_HEADER"
     private const val KEY_CUSTOM_AUTH_PREFIX = "CUSTOM_AUTH_PREFIX"
+    private const val KEY_LOCAL_ENDPOINT = "LOCAL_OPENAI_ENDPOINT"
+    private const val KEY_LOCAL_MODEL = "LOCAL_OPENAI_MODEL"
 
     @Volatile
     private var cachedPrefs: SharedPreferences? = null
@@ -37,7 +39,7 @@ object ApiKeyManager {
     }
 
     fun saveProviderKey(context: Context, provider: AiProviderId, apiKey: String) {
-        require(provider != AiProviderId.CUSTOM) { "Use saveCustomProvider for a custom provider" }
+        require(provider != AiProviderId.CUSTOM && provider != AiProviderId.LOCAL_OPENAI) { "Use the dedicated custom/local provider method" }
         val normalized = AiProviderRegistry.normalizeSecret(apiKey)
         require(normalized.isNotBlank()) { "API key cannot be blank" }
         prefs(context).edit()
@@ -55,17 +57,38 @@ object ApiKeyManager {
 
     fun hasProviderKey(context: Context, provider: AiProviderId): Boolean = getProviderKey(context, provider) != null
 
+    fun hasProviderAccess(context: Context, provider: AiProviderId): Boolean =
+        if (provider == AiProviderId.LOCAL_OPENAI) {
+            prefs(context).getString(KEY_LOCAL_ENDPOINT, null)?.isNotBlank() == true &&
+                prefs(context).getString(KEY_LOCAL_MODEL, null)?.isNotBlank() == true
+        } else hasProviderKey(context, provider)
+
     fun clearProviderKey(context: Context, provider: AiProviderId) {
         val editor = prefs(context).edit().remove(providerKey(provider))
         if (provider == AiProviderId.OPENAI) editor.remove(KEY_OPENAI_API)
         if (provider == AiProviderId.CUSTOM) editor.remove(KEY_CUSTOM_ENDPOINT).remove(KEY_CUSTOM_MODEL).remove(KEY_CUSTOM_AUTH_HEADER).remove(KEY_CUSTOM_AUTH_PREFIX)
+        if (provider == AiProviderId.LOCAL_OPENAI) editor.remove(KEY_LOCAL_ENDPOINT).remove(KEY_LOCAL_MODEL)
         if (activeProvider(context) == provider) editor.remove(KEY_ACTIVE_PROVIDER)
         editor.apply()
     }
 
     fun configuredProviders(context: Context): Set<AiProviderId> = AiProviderId.entries
-        .filter { hasProviderKey(context, it) }
+        .filter { hasProviderAccess(context, it) }
         .toSet()
+
+    fun saveLocalProvider(context: Context, endpoint: String, model: String) {
+        com.shoshiluna.executive.core.network.AiProviderProtocols.local(endpoint, model)
+        prefs(context).edit()
+            .putString(KEY_LOCAL_ENDPOINT, endpoint.trim())
+            .putString(KEY_LOCAL_MODEL, model.trim())
+            .putString(KEY_ACTIVE_PROVIDER, AiProviderId.LOCAL_OPENAI.name)
+            .apply()
+    }
+
+    fun localProtocol(context: Context) = com.shoshiluna.executive.core.network.AiProviderProtocols.local(
+        requireNotNull(prefs(context).getString(KEY_LOCAL_ENDPOINT, null)),
+        requireNotNull(prefs(context).getString(KEY_LOCAL_MODEL, null))
+    )
 
     fun saveCustomProvider(context: Context, apiKey: String, endpoint: String, model: String, authHeader: String = "Authorization", authPrefix: String = "Bearer ") {
         com.shoshiluna.executive.core.network.AiProviderProtocols.custom(endpoint, model, authHeader, authPrefix)
@@ -89,7 +112,7 @@ object ApiKeyManager {
         ?.let { runCatching { AiProviderId.valueOf(it) }.getOrNull() }
 
     fun setActiveProvider(context: Context, provider: AiProviderId) {
-        require(hasProviderKey(context, provider)) { "Provider key is not configured" }
+        require(hasProviderAccess(context, provider)) { "Provider is not configured" }
         prefs(context).edit().putString(KEY_ACTIVE_PROVIDER, provider.name).apply()
     }
 

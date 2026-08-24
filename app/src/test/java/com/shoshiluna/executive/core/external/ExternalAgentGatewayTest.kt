@@ -28,6 +28,16 @@ class ExternalAgentGatewayTest {
         assertTrue(EndpointPolicy.validate("https://example.com/agent").isSuccess)
     }
 
+    @Test fun trustCannotBeGrantedWithoutVerifiedHandshakeProof() {
+        val candidate = TrustedExternalAgentRegistry.registerCandidate(
+            ExternalAgentDescriptor(displayName = "Partner", endpoint = "https://example.com/agent", protocol = ExternalProtocol.GENERIC_HTTPS_JSON)
+        ).getOrThrow()
+        assertThrows(IllegalStateException::class.java) {
+            TrustedExternalAgentRegistry.markTrusted(candidate.id, null)
+        }
+        assertEquals(ExternalTrustStatus.PENDING, TrustedExternalAgentRegistry.get(candidate.id)?.trustStatus)
+    }
+
     @Test fun untrustedExternalAgentCannotBeContacted() = runBlocking {
         val mission = EmpireMissionControl.createMission("External test", ExecutiveAgent.SHOSHI.id)
         EmpireMissionControl.transitionStatus(mission.id, MissionStatus.PLANNED, "planned")

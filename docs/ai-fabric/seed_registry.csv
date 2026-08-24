@@ -1,0 +1,11 @@
+id,provider,status,trust,ownership,context,input_usd_per_million,output_usd_per_million
+openai/gpt-5.6-sol,openai,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1050000,4.0,20.0
+openai/gpt-5.6-terra,openai,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1050000,2.0,12.0
+openai/gpt-5.6-luna,openai,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1050000,0.2,1.2
+anthropic/claude-opus-4-7,anthropic,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1000000,5.0,25.0
+anthropic/claude-sonnet-4-6,anthropic,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1000000,3.0,15.0
+anthropic/claude-haiku-4-5,anthropic,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,200000,1.0,5.0
+google/gemini-3.7-flash,google_gemini,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1000000,0.75,3.75
+google/gemini-3.5-flash,google_gemini,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1000000,1.5,9.0
+google/gemini-2.5-pro,google_gemini,DOCUMENTED,T2_VERIFIED_PROVIDER,PROPRIETARY,1000000,1.25,10.0
+local/custom-open-weight,local,DISCOVERED,T1_PUBLIC_OPEN,OPEN_WEIGHT,,,,

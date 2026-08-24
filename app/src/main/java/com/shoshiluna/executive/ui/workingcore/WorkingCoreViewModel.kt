@@ -10,6 +10,7 @@ import com.shoshiluna.executive.core.agent.WorkingCoreAiGateway
 import com.shoshiluna.executive.core.agent.SovereignMemory
 import com.shoshiluna.executive.core.agent.SovereignMemoryVault
 import com.shoshiluna.executive.core.agent.MemoryPartition
+import com.shoshiluna.executive.core.attachments.ChatAttachment
 import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.AiConnectionState
@@ -36,7 +37,8 @@ data class WorkingCoreUiState(
     val isSending: Boolean = false,
     val messages: List<WorkingCoreMessage> = emptyList(),
     val error: String? = null,
-    val speakMessageId: String? = null
+    val speakMessageId: String? = null,
+    val routingLabel: String? = null
 )
 
 class WorkingCoreViewModel(
@@ -54,11 +56,20 @@ class WorkingCoreViewModel(
         _uiState.value = _uiState.value.copy(selectedAgent = agent, error = null)
     }
 
-    fun send(prompt: String, speakResponse: Boolean = false) {
+    fun send(prompt: String, attachments: List<ChatAttachment> = emptyList(), speakResponse: Boolean = false) {
         val clean = prompt.trim()
         if (clean.isBlank() || _uiState.value.isSending) return
         val agent = _uiState.value.selectedAgent
-        val userMessage = WorkingCoreMessage(agent = agent, fromUser = true, text = clean)
+        val attachmentLabel = attachments.takeIf { it.isNotEmpty() }?.joinToString(
+            prefix = "\n\nמצורפים שנבדקו:\n", separator = "\n\n"
+        ) {
+            buildString {
+                append("- ${it.displayName} (${it.mimeType}, ${it.sizeBytes} bytes)")
+                it.safeTextPreview?.let { preview -> append("\n--- תוכן בטוח לניתוח ---\n").append(preview) }
+            }
+        }.orEmpty()
+        val visiblePrompt = clean + attachmentLabel
+        val userMessage = WorkingCoreMessage(agent = agent, fromUser = true, text = visiblePrompt)
 
         // Explicit USER commands are executed deterministically before the AI path.
         // AI-generated text can never reach this bridge directly.
@@ -95,7 +106,10 @@ class WorkingCoreViewModel(
         )
         activeRequest?.cancel()
         activeRequest = viewModelScope.launch {
-            when (val result = gateway.send(agent, clean)) {
+            // Attachments are deliberately represented as verified metadata here. Binary files are never
+            // executed; provider-specific image/document extraction is handled by a separate sandboxed tool.
+            val visualInputs = attachments.flatMap { it.visualInputs }
+            when (val result = gateway.sendWithImages(agent, visiblePrompt, visualInputs)) {
                 is AiCallResult.Success -> {
                     val answer = WorkingCoreMessage(agent = agent, fromUser = false, text = result.text)
                     val partition = if (agent == ExecutiveAgent.SHOSHI) MemoryPartition.SHOSHI_PRIVATE else MemoryPartition.LUNA_PRIVATE
@@ -103,7 +117,7 @@ class WorkingCoreViewModel(
                         SovereignMemory(
                             partition = partition,
                             agentId = agent.id,
-                            content = "USER REQUEST: $clean",
+                            content = "USER REQUEST: $visiblePrompt",
                             importance = 0.55f,
                             evidenceCategory = EvidenceCategory.USER_PROVIDED
                         )
@@ -122,6 +136,7 @@ class WorkingCoreViewModel(
                         isSending = false,
                         messages = _uiState.value.messages + answer,
                         error = null,
+                        routingLabel = listOfNotNull(result.taskProfile?.name, result.provider?.name, result.model).joinToString(" • ").ifBlank { null },
                         speakMessageId = if (speakResponse) answer.id else null
                     )
                 }

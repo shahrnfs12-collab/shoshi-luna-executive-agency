@@ -7,6 +7,11 @@ import com.shoshiluna.executive.core.health.SystemHealthManager
 import com.shoshiluna.executive.core.hardening.CapabilityRegistry
 import com.shoshiluna.executive.core.hardening.CapabilityStatus
 import com.shoshiluna.executive.core.security.ApiKeyManager
+import com.shoshiluna.executive.core.fabric.FabricAuditLedger
+import com.shoshiluna.executive.core.fabric.ProviderHealthMonitor
+import com.shoshiluna.executive.core.fabric.SecureCredentialBroker
+import com.shoshiluna.executive.core.fabric.ModelRegistry
+import com.shoshiluna.executive.core.fabric.RegistryStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,7 +36,12 @@ enum class AiConnectionState {
 }
 
 sealed interface AiCallResult {
-    data class Success(val text: String) : AiCallResult
+    data class Success(
+        val text: String,
+        val provider: AiProviderId? = null,
+        val taskProfile: AiTaskProfile? = null,
+        val model: String? = null
+    ) : AiCallResult
     data class Failure(val state: AiConnectionState, val safeMessage: String, val httpCode: Int? = null) : AiCallResult
 }
 
@@ -58,7 +68,9 @@ object OpenAiClient {
     suspend fun getCompletionResult(
         messages: List<ChatMessage>,
         model: String = DEFAULT_MODEL,
-        providerOverride: AiProviderId? = null
+        providerOverride: AiProviderId? = null,
+        images: List<AiImageInput> = emptyList(),
+        resolvedModelOverride: String? = null
     ): AiCallResult = withContext(Dispatchers.IO) {
         val context = appContext ?: return@withContext fail(
             AiConnectionState.OFFLINE,
@@ -66,9 +78,8 @@ object OpenAiClient {
         )
 
         val provider = providerOverride ?: ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
-        val apiKey = ApiKeyManager.getProviderKey(context, provider)
-        if (apiKey.isNullOrBlank()) {
-            return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
+        if (!ApiKeyManager.hasProviderAccess(context, provider)) {
+            return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} is not configured.")
         }
 
         SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting")
@@ -76,17 +87,54 @@ object OpenAiClient {
         val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message ->
             if (message.role == "user") message.content else "${message.role}: ${message.content}"
         }
-        val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
-        val effectiveModel = if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
-        val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input).toRequestBody(mediaType)
-        val requestBuilder = Request.Builder()
-            .url(protocol.endpoint)
-            .header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
-            .header("Content-Type", "application/json")
+        val protocol = when (provider) {
+            AiProviderId.CUSTOM -> ApiKeyManager.customProtocol(context)
+            AiProviderId.LOCAL_OPENAI -> ApiKeyManager.localProtocol(context)
+            else -> AiProviderProtocols.forProvider(provider)
+        }
+        val effectiveModel = if (provider == AiProviderId.LOCAL_OPENAI) protocol.defaultModel
+            else resolvedModelOverride ?: if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
+        val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input, images).toRequestBody(mediaType)
+        val startedAt = System.currentTimeMillis()
+        val result = if (provider == AiProviderId.LOCAL_OPENAI) {
+            executeProviderCall(provider, protocol, null, requestBody, effectiveModel)
+        } else SecureCredentialBroker.withCredential(context, SecureCredentialBroker.reference(provider)) { apiKey ->
+            executeProviderCall(provider, protocol, apiKey, requestBody, effectiveModel)
+        }
+        val elapsed = System.currentTimeMillis() - startedAt
+        val success = result is AiCallResult.Success
+        ProviderHealthMonitor.record(provider.name, success, elapsed)
+        if (success) {
+            val registryId = when (provider) {
+                AiProviderId.OPENAI -> "openai/$effectiveModel"
+                AiProviderId.ANTHROPIC -> "anthropic/$effectiveModel"
+                AiProviderId.GOOGLE_GEMINI -> "google/$effectiveModel"
+                AiProviderId.OPENROUTER -> effectiveModel
+                AiProviderId.LOCAL_OPENAI -> "local/$effectiveModel"
+                AiProviderId.CUSTOM -> "custom/$effectiveModel"
+            }
+            ModelRegistry.get(registryId)?.let {
+                ModelRegistry.transition(registryId, RegistryStatus.CONNECTED,
+                    it.metrics.copy(latencyP50Ms = elapsed, lastSuccessAt = System.currentTimeMillis(), consecutiveFailures = 0))
+            }
+        }
+        FabricAuditLedger.append("PROVIDER_CALL", modelId = (result as? AiCallResult.Success)?.model ?: effectiveModel, outcome = if (success) "SUCCESS:${elapsed}ms" else "FAILED:${elapsed}ms")
+        result
+    }
+
+    private fun executeProviderCall(
+        provider: AiProviderId,
+        protocol: AiProviderProtocol,
+        apiKey: String?,
+        requestBody: okhttp3.RequestBody,
+        effectiveModel: String
+    ): AiCallResult {
+        val requestBuilder = Request.Builder().url(protocol.endpoint).header("Content-Type", "application/json")
+        if (!apiKey.isNullOrBlank()) requestBuilder.header(protocol.authenticationHeader, protocol.authenticationPrefix + apiKey)
         if (provider == AiProviderId.ANTHROPIC) requestBuilder.header("anthropic-version", "2023-06-01")
         val request = requestBuilder.post(requestBody).build()
 
-        try {
+        return try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val state = when (response.code) {
@@ -95,22 +143,26 @@ object OpenAiClient {
                         in 500..599 -> AiConnectionState.ERROR
                         else -> AiConnectionState.ERROR
                     }
-                    return@withContext fail(state, safeHttpMessage(provider, response.code), response.code)
+                    return fail(state, safeHttpMessage(provider, response.code), response.code)
                 }
 
                 val body = response.body?.string().orEmpty()
                 if (body.isBlank()) {
-                    return@withContext fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
+                    return fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
                 }
 
                 val text = AiProviderPayloadCodec.decodeText(provider, body)
                 if (text.isBlank()) {
-                    return@withContext fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
+                    return fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
                 }
 
                 SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated provider response")
                 CapabilityRegistry.update("ai", CapabilityStatus.READY, "Real provider response validated at runtime")
-                AiCallResult.Success(text)
+                val root = runCatching { gson.fromJson(body, com.google.gson.JsonObject::class.java) }.getOrNull()
+                val reportedModel = listOf("model", "modelVersion").firstNotNullOfOrNull { field ->
+                    root?.get(field)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotBlank() }
+                } ?: effectiveModel
+                AiCallResult.Success(text, provider = provider, model = reportedModel)
             }
         } catch (_: SocketTimeoutException) {
             fail(AiConnectionState.OFFLINE, "AI request timed out.")

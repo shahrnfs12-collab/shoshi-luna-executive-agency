@@ -11,6 +11,9 @@ import com.shoshiluna.executive.core.business.ArtifactFactory
 import com.shoshiluna.executive.core.business.ArtifactType
 import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.business.EvidenceRegistry
+import com.shoshiluna.executive.core.security.ApprovalRiskLevel
+import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import com.shoshiluna.executive.core.fabric.AgencyBrainCouncil
 
 /**
  * Executive consultation workflow. No canned "success" responses.
@@ -23,8 +26,14 @@ object CollaborationEngine {
 
     fun startConsultation(missionId: String, initiatorId: String, targetId: String, topic: String) {
         if (EmpireMissionControl.state.value.emergencyHalt) return
-        scope.launch {
-            val conversation = CommunicationBus.startConversation(missionId, setOf(initiatorId, targetId))
+        scope.launch { runConsultation(missionId, initiatorId, targetId, topic) }
+    }
+
+    suspend fun runConsultation(missionId: String, initiatorId: String, targetId: String, topic: String) {
+        if (EmpireMissionControl.state.value.emergencyHalt) return
+        val mission = EmpireMissionControl.state.value.missions.firstOrNull { it.id == missionId } ?: return
+        if (mission.status !in setOf(MissionStatus.RUNNING, MissionStatus.EXECUTING, MissionStatus.WAITING_FOR_EXTERNAL_RESPONSE)) return
+        val conversation = CommunicationBus.startConversation(missionId, setOf(initiatorId, targetId))
             val initialRequest = InternalMessage(
                 conversationId = conversation.id,
                 missionId = missionId,
@@ -35,17 +44,13 @@ object CollaborationEngine {
             )
             if (!CommunicationBus.sendMessage(initialRequest)) {
                 EmpireMissionControl.transitionStatus(missionId, MissionStatus.FAILED, "Communication Bus denied request")
-                return@launch
+                return
             }
 
             val memory = SovereignMemoryVault.getMissionMemory(missionId) +
                 SovereignMemoryVault.getPartition(MemoryPartition.EXECUTIVE_SHARED, targetId)
-            val aiResult = provider.chatResult(
-                prompt = "Review this mission/topic and give a concrete executive analysis, risks, evidence gaps and next actions: $topic",
-                context = memory,
-                missionId = missionId,
-                agent = if (targetId == ExecutiveAgent.LUNA.id) ExecutiveAgent.LUNA else ExecutiveAgent.SHOSHI
-            )
+            val council = AgencyBrainCouncil.execute(topic, memory.map { it.content }, missionId)
+            val aiResult = council.finalResult
             val reply = when (aiResult) {
                 is com.shoshiluna.executive.core.network.AiCallResult.Success -> aiResult.text
                 is com.shoshiluna.executive.core.network.AiCallResult.Failure -> "AI ${aiResult.state}: ${aiResult.safeMessage}"
@@ -68,7 +73,7 @@ object CollaborationEngine {
                     MissionStatus.WAITING_FOR_EXTERNAL_RESPONSE,
                     "AI provider unavailable; no fabricated consultation result"
                 )
-                return@launch
+                return
             }
 
             val result = CollaborationResult(
@@ -96,6 +101,13 @@ object CollaborationEngine {
             )
             EmpireMissionControl.updatePlanStep(missionId, 3, "COMPLETED", "Auditable deliverable created")
             EmpireMissionControl.updatePlanStep(missionId, 4, "WAITING_APPROVAL", "Owner review required")
+            HumanApprovalGateway.requestApproval(
+                action = "אישור התוצר למשימה: $topic",
+                agentId = initiatorId,
+                risk = ApprovalRiskLevel.MEDIUM,
+                reason = "Executive deliverable ${artifact.id} is ready for owner review",
+                missionId = missionId
+            )
             SovereignMemoryVault.record(
                 SovereignMemory(
                     partition = MemoryPartition.MISSION_SCOPED,
@@ -104,8 +116,7 @@ object CollaborationEngine {
                     content = reply
                 )
             )
-            EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive deliverable ${artifact.id} created; human review required")
-        }
+        EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Executive deliverable ${artifact.id} created; human review required")
     }
 
     fun getResult(missionId: String): CollaborationResult? = results[missionId]

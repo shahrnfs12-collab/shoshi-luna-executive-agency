@@ -6,6 +6,8 @@ import java.util.UUID
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.shoshiluna.executive.core.empire.EmpireMissionControl
+import com.shoshiluna.executive.core.empire.MissionStatus
 
 enum class ApprovalRiskLevel {
     LOW,
@@ -22,7 +24,8 @@ data class ApprovalRequest(
     val reason: String,
     val timestamp: Long = System.currentTimeMillis(),
     var userDecision: Boolean? = null,
-    var executionResult: String? = null
+    var executionResult: String? = null,
+    val missionId: String? = null
 )
 
 /**
@@ -50,13 +53,15 @@ object HumanApprovalGateway {
         action: String,
         agentId: String,
         risk: ApprovalRiskLevel,
-        reason: String
+        reason: String,
+        missionId: String? = null
     ): String {
         val request = ApprovalRequest(
             requestedAction = action,
             requestingAgentId = agentId,
             riskLevel = risk,
-            reason = reason
+            reason = reason,
+            missionId = missionId
         )
         _requests.value = _requests.value + (request.id to request)
         persist()
@@ -68,6 +73,16 @@ object HumanApprovalGateway {
         val request = _requests.value[requestId] ?: return
         _requests.value = _requests.value + (requestId to request.copy(userDecision = decision))
         persist()
+        request.missionId?.let { missionId ->
+            val mission = EmpireMissionControl.state.value.missions.firstOrNull { it.id == missionId } ?: return@let
+            if (mission.status == MissionStatus.REVIEW) {
+                EmpireMissionControl.transitionStatus(
+                    missionId,
+                    if (decision) MissionStatus.COMPLETED else MissionStatus.REJECTED,
+                    if (decision) "Human approved executive deliverable" else "Human rejected executive deliverable"
+                )
+            }
+        }
     }
 
     @Synchronized

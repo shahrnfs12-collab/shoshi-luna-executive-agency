@@ -94,6 +94,10 @@ object DigitalHumanController {
         }
     }
 
+    fun setAnimation(agentId: String, state: AnimationState) {
+        if (agentId == "SHOSHI") _shoshiAnim.value = state else _lunaAnim.value = state
+    }
+
     fun triggerBlink(agentId: String) {
         // Blink requires a verified eyelid morph target in the final rigged GLB; no fake animation is emitted.
     }

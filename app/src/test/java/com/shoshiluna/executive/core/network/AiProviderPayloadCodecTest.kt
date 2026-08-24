@@ -6,7 +6,7 @@ import org.junit.Test
 
 class AiProviderPayloadCodecTest {
     @Test fun `encodes every built in provider`() {
-        AiProviderId.entries.filter { it != AiProviderId.CUSTOM }.forEach {
+        AiProviderId.entries.filter { it !in setOf(AiProviderId.CUSTOM, AiProviderId.LOCAL_OPENAI) }.forEach {
             val json = AiProviderPayloadCodec.encode(it, AiProviderProtocols.forProvider(it).defaultModel, "system", "hello")
             assertTrue(json.contains("hello"))
         }
@@ -18,5 +18,15 @@ class AiProviderPayloadCodecTest {
         assertEquals("g", AiProviderPayloadCodec.decodeText(AiProviderId.GOOGLE_GEMINI, "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"g\"}]}}]}"))
         assertEquals("r", AiProviderPayloadCodec.decodeText(AiProviderId.OPENROUTER, "{\"choices\":[{\"message\":{\"content\":\"r\"}}]}"))
         assertEquals("c", AiProviderPayloadCodec.decodeText(AiProviderId.CUSTOM, "{\"choices\":[{\"message\":{\"content\":\"c\"}}]}"))
+    }
+
+    @Test fun `encodes real image input for every provider`() {
+        val image = AiImageInput("image/jpeg", "AQID", "photo.jpg")
+        AiProviderId.entries.forEach { provider ->
+            val model = if (provider in setOf(AiProviderId.CUSTOM, AiProviderId.LOCAL_OPENAI)) "custom" else AiProviderProtocols.forProvider(provider).defaultModel
+            val json = AiProviderPayloadCodec.encode(provider, model, null, "see", listOf(image))
+            assertTrue(json.contains("AQID"))
+            assertTrue(json.contains("image"))
+        }
     }
 }

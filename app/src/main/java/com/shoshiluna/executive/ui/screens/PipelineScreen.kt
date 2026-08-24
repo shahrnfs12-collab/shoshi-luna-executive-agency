@@ -21,12 +21,12 @@ fun PipelineScreen() {
     val pipelineStates by AgencyOrchestrator.pipelineStates.collectAsState()
     
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Business Pipeline", style = MaterialTheme.typography.headlineMedium, color = Gold, fontWeight = FontWeight.Black)
-        Text("12-Stage Super-Agency Workflow", color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
+        Text("הצנרת העסקית", style = MaterialTheme.typography.headlineMedium, color = Gold, fontWeight = FontWeight.Black)
+        Text("תהליך סוכנות בן 12 שלבים", color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
         
         if (pipelineStates.isEmpty()) {
             Box(Modifier.fillMaxSize()) {
-                Text("No active pipelines. Start a mission to see progress.", color = Color.Gray)
+                Text("אין תהליכים פעילים. התחילי משימה כדי לראות התקדמות.", color = Color.Gray)
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -45,8 +45,8 @@ private fun PipelineCard(missionId: String, currentStage: PipelineStage) {
         colors = CardDefaults.elevatedCardColors(containerColor = Panel)
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("Mission: ${missionId.take(8)}", color = Gold, fontWeight = FontWeight.Bold)
-            Text("Current Stage: $currentStage", color = Color.White)
+            Text("משימה: ${missionId.take(8)}", color = Gold, fontWeight = FontWeight.Bold)
+            Text("שלב נוכחי: $currentStage", color = Color.White)
             
             LinearProgressIndicator(
                 progress = { (PipelineStage.entries.indexOf(currentStage) + 1).toFloat() / PipelineStage.entries.size },

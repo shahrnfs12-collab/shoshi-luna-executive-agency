@@ -35,6 +35,8 @@ object PresenceStateEngine {
 
         if (voice == VoiceState.SPEAKING) {
             _shoshiPresence.value = PresenceState.SPEAKING
+            DigitalHumanController.setAnimation("SHOSHI", AnimationState.SPEAK)
+            DigitalHumanController.setAnimation("LUNA", AnimationState.LISTEN)
             DigitalHumanController.triggerExpression("SHOSHI", MicroExpression("TALKING", 1.0f, 1000L))
         } else if (activeMissions.isNotEmpty()) {
             val mission = activeMissions.first()
@@ -44,6 +46,7 @@ object PresenceStateEngine {
             _lunaPresence.value = PresenceState.THINKING
             
             DigitalHumanController.walkTo("SHOSHI", targetArea)
+            DigitalHumanController.setAnimation("LUNA", AnimationState.LISTEN)
             DigitalHumanController.updateGaze("LUNA", targetArea)
         } else {
             _shoshiPresence.value = PresenceState.IDLE

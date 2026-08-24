@@ -2,6 +2,7 @@ package com.shoshiluna.executive.core.agent
 
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.ChatMessage
+import com.shoshiluna.executive.core.network.AiImageInput
 import com.shoshiluna.executive.core.network.ResilientAiClient
 import com.shoshiluna.executive.core.engine.TitanEngine
 
@@ -29,6 +30,14 @@ interface AiProvider {
         missionId: String? = null,
         agent: ExecutiveAgent = ExecutiveAgent.SHOSHI
     ): AiCallResult
+
+    suspend fun chatResultWithImages(
+        prompt: String,
+        context: List<SovereignMemory>,
+        missionId: String? = null,
+        agent: ExecutiveAgent = ExecutiveAgent.SHOSHI,
+        images: List<AiImageInput> = emptyList()
+    ): AiCallResult = chatResult(prompt, context, missionId, agent)
 }
 
 object AgentSystemPrompts {
@@ -91,6 +100,16 @@ class OpenAiProvider : AiProvider {
         missionId: String?,
         agent: ExecutiveAgent
     ): AiCallResult {
+        return chatResultWithImages(prompt, context, missionId, agent, emptyList())
+    }
+
+    override suspend fun chatResultWithImages(
+        prompt: String,
+        context: List<SovereignMemory>,
+        missionId: String?,
+        agent: ExecutiveAgent,
+        images: List<AiImageInput>
+    ): AiCallResult {
         val memoryContext = context.takeLast(20).joinToString("\n") { memory ->
             "[${memory.partition}/${memory.evidenceCategory}] ${memory.content}"
         }
@@ -101,6 +120,6 @@ class OpenAiProvider : AiProvider {
         }
         val context = TitanEngine.applicationContext()
             ?: return AiCallResult.Failure(com.shoshiluna.executive.core.network.AiConnectionState.OFFLINE, "AI runtime is not initialized.")
-        return ResilientAiClient.getCompletionResult(context, messages, AgentModelPolicy.modelFor(agent))
+        return ResilientAiClient.getCompletionResult(context, messages, AgentModelPolicy.modelFor(agent), images)
     }
 }

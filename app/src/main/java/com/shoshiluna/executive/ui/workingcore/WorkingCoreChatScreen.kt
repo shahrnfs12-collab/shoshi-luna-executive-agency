@@ -1,5 +1,7 @@
 package com.shoshiluna.executive.ui.workingcore
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -10,6 +12,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
@@ -26,6 +30,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shoshiluna.executive.R
 import com.shoshiluna.executive.core.agent.ExecutiveAgent
+import com.shoshiluna.executive.core.attachments.AttachmentInspection
+import com.shoshiluna.executive.core.attachments.ChatAttachment
+import com.shoshiluna.executive.core.attachments.SafeAttachmentInspector
+import com.shoshiluna.executive.core.fabric.ModelRegistry
+import com.shoshiluna.executive.core.fabric.PublicCatalogDiscovery
 import com.shoshiluna.executive.core.network.AiConnectionState
 import com.shoshiluna.executive.core.network.AiProviderId
 import com.shoshiluna.executive.core.network.AiProviderRegistry
@@ -39,7 +48,9 @@ import com.shoshiluna.executive.core.voice.AudioPermissionState
 import com.shoshiluna.executive.core.voice.SttState
 import com.shoshiluna.executive.core.voice.rememberAudioPermissionFlow
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val ChatGold = Color(0xFFD8B45A)
 private val ChatPanel = Color(0xFF111111)
@@ -54,10 +65,40 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var input by remember { mutableStateOf("") }
     var apiKeyInput by remember { mutableStateOf("") }
     var providerSelection by remember { mutableStateOf(ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI) }
+    var requiresProviderSelection by remember { mutableStateOf(false) }
     var keyStatus by remember { mutableStateOf<String?>(null) }
     var customEndpoint by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
+    var localEndpoint by remember { mutableStateOf("") }
+    var localModel by remember { mutableStateOf("llama3.2") }
+    var providerHealth by remember { mutableStateOf<Map<AiProviderId, String>>(emptyMap()) }
+    var testingAllProviders by remember { mutableStateOf(false) }
+    var discoveringCatalog by remember { mutableStateOf(false) }
+    var catalogStatus by remember { mutableStateOf<String?>(null) }
+    val catalogModels by ModelRegistry.models.collectAsState()
     var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
+    var attachments by remember { mutableStateOf<List<ChatAttachment>>(emptyList()) }
+    var attachmentStatus by remember { mutableStateOf<String?>(null) }
+    val attachmentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        scope.launch {
+            val availableSlots = (SafeAttachmentInspector.MAX_FILES - attachments.size).coerceAtLeast(0)
+            val selected = uris.take(availableSlots)
+            val results = withContext(Dispatchers.IO) {
+                selected.map { uri -> SafeAttachmentInspector.inspect(context.contentResolver, uri) }
+            }
+            val accepted = results.filterIsInstance<AttachmentInspection.Accepted>().map { it.attachment }
+            attachments = (attachments + accepted).distinctBy { it.uri }.take(SafeAttachmentInspector.MAX_FILES)
+            val rejected = results.filterIsInstance<AttachmentInspection.Rejected>()
+            attachmentStatus = when {
+                rejected.isNotEmpty() -> rejected.joinToString(" • ") { it.reason }
+                accepted.isNotEmpty() -> "${accepted.size} קבצים נבדקו ומוכנים לצירוף"
+                uris.isNotEmpty() && availableSlots == 0 -> "אפשר לצרף עד ${SafeAttachmentInspector.MAX_FILES} קבצים"
+                else -> null
+            }
+        }
+    }
 
     fun beginListening() {
         VoiceEngine.stopSpeech()
@@ -95,6 +136,16 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
         )
 
         ConnectionBanner(ui.connection, ui.error)
+        ui.routingLabel?.let { route ->
+            Surface(color = ChatGold.copy(alpha = 0.10f), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "נתב המוחות • $route",
+                    color = ChatGold,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
+        }
 
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -140,25 +191,65 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         TextButton(onClick = { showApiSettings = false }) { Text("סגירה") }
                     }
                     Text(
-                        ApiKeyManager.configuredProviders(context).takeIf { it.isNotEmpty() }
-                            ?.joinToString(prefix = "מפתחות שמורים ומוצפנים: ") { it.name }
-                            ?: "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
+                        if (ApiKeyManager.configuredProviders(context).isNotEmpty())
+                            "קיימים ${ApiKeyManager.configuredProviders(context).size} חיבורים מוצפנים. פרטי המפתחות מוסתרים."
+                        else "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
                         color = Color.LightGray
                     )
+                    Surface(color = ChatGold.copy(alpha = 0.08f), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("מאגר Intelligence Fabric", color = ChatGold, fontWeight = FontWeight.Bold)
+                            Text("${catalogModels.size} מתוך ${ModelRegistry.MAX_MODELS} מנועים מקוטלגים", color = Color.White)
+                            Text(
+                                "${ModelRegistry.verified().size} אומתו בקריאה חיה • ${ApiKeyManager.configuredProviders(context).size} ספקים מחוברים",
+                                color = Color.LightGray,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "המאגר כולל מודלים, לא מפתחות. מפתחות פרטיים נוספים רק מחשבונות מורשים שלך ונשמרים מוצפנים.",
+                                color = Color.Gray,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Button(
+                                enabled = !discoveringCatalog,
+                                onClick = {
+                                    discoveringCatalog = true
+                                    catalogStatus = "סורקת קטלוגים ציבוריים…"
+                                    scope.launch {
+                                        val results = withContext(Dispatchers.IO) {
+                                            buildList {
+                                                add(PublicCatalogDiscovery.discoverHuggingFace())
+                                                if (ApiKeyManager.hasProviderKey(context, AiProviderId.OPENROUTER)) {
+                                                    add(PublicCatalogDiscovery.discoverOpenRouter(context))
+                                                }
+                                            }
+                                        }
+                                        val accepted = results.sumOf { it.accepted }
+                                        val failed = results.sumOf { it.failed }
+                                        catalogStatus = "הסריקה הסתיימה: ${ModelRegistry.all().size}/${ModelRegistry.MAX_MODELS} במאגר • $accepted נוספו/עודכנו • $failed נכשלו"
+                                        discoveringCatalog = false
+                                    }
+                                }
+                            ) { Text(if (discoveringCatalog) "סורקת…" else "עדכון מאגר המנועים") }
+                            catalogStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
                     Text(
-                        "Production security gate: provider API secrets must move to a server-side relay before public release.",
+                        "שער אבטחה: לפני הפצה ציבורית יש להעביר סודות ספקים למתווך מאובטח בצד השרת.",
                         color = Color.Gray,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Text("בחרי ספק — הזיהוי האוטומטי יעדכן את הבחירה כשאפשר:", color = Color.LightGray)
-                    AiProviderId.entries.chunked(2).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { provider ->
-                                FilterChip(
-                                    selected = providerSelection == provider,
-                                    onClick = { providerSelection = provider; keyStatus = null },
-                                    label = { Text(provider.name) }
-                                )
+                    if (requiresProviderSelection) {
+                        Text("סוג המפתח אינו חד־משמעי. בחרי את הספק פעם אחת:", color = Color.LightGray)
+                        AiProviderId.entries.chunked(2).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { provider ->
+                                    FilterChip(
+                                        selected = providerSelection == provider,
+                                        onClick = { providerSelection = provider; requiresProviderSelection = false; keyStatus = "הספק שויך" },
+                                        label = { Text(provider.name) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -166,12 +257,18 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         OutlinedTextField(customEndpoint, { customEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת HTTPS של OpenAI-compatible API") }, singleLine = true)
                         OutlinedTextField(customModel, { customModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל") }, singleLine = true)
                     }
-                    OutlinedTextField(
+                    if (providerSelection == AiProviderId.LOCAL_OPENAI) {
+                        Text("מנוע מקומי ללא מפתח", color = ChatGold, fontWeight = FontWeight.Bold)
+                        Text("נתמך: Ollama (פורט 11434), LM Studio (פורט 1234) ו־llama.cpp (פורט 8080). מטעמי אבטחה יש לחשוף את השרת דרך כתובת HTTPS מאובטחת.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(localEndpoint, { localEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת HTTPS של השרת המקומי") }, singleLine = true)
+                        OutlinedTextField(localModel, { localModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל מקומי") }, singleLine = true)
+                    } else OutlinedTextField(
                         value = apiKeyInput,
                         onValueChange = { value ->
                             apiKeyInput = value
                             keyStatus = runCatching { AiProviderRegistry.detect(value) }.getOrNull()?.let { detected ->
                                 detected.provider?.also { providerSelection = it }
+                                requiresProviderSelection = detected.requiresUserSelection
                                 if (detected.requiresUserSelection) "לא ניתן לזהות בוודאות — בחרי ספק" else "זוהה: ${detected.provider?.name}"
                             }
                         },
@@ -183,23 +280,36 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                     keyStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            enabled = apiKeyInput.isNotBlank() && (providerSelection != AiProviderId.CUSTOM || (customEndpoint.isNotBlank() && customModel.isNotBlank())),
+                            enabled = if (providerSelection == AiProviderId.LOCAL_OPENAI) localEndpoint.isNotBlank() && localModel.isNotBlank()
+                                else apiKeyInput.isNotBlank() && (providerSelection != AiProviderId.CUSTOM || (customEndpoint.isNotBlank() && customModel.isNotBlank())),
                             onClick = {
-                                if (providerSelection == AiProviderId.CUSTOM) {
+                                if (providerSelection == AiProviderId.LOCAL_OPENAI) {
+                                    ApiKeyManager.saveLocalProvider(context, localEndpoint, localModel)
+                                } else if (providerSelection == AiProviderId.CUSTOM) {
                                     ApiKeyManager.saveCustomProvider(context, apiKeyInput, customEndpoint, customModel)
                                 } else ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
                                 apiKeyInput = ""
-                                keyStatus = "נשמר מוצפן עבור ${providerSelection.name}; החיבור יאומת בבקשה הבאה"
+                                val savedProvider = providerSelection
+                                keyStatus = if (savedProvider == AiProviderId.LOCAL_OPENAI) "החיבור המקומי נשמר. מבצעת בדיקה אמיתית…" else "נשמר מוצפן. מבצעת בדיקת חיבור אמיתית…"
+                                scope.launch {
+                                    keyStatus = when (val result = OpenAiClient.getCompletionResult(
+                                        messages = listOf(ChatMessage("user", "Reply with exactly: OK")),
+                                        providerOverride = savedProvider
+                                    )) {
+                                        is AiCallResult.Success -> if (savedProvider == AiProviderId.LOCAL_OPENAI) "המנוע המקומי החזיר תשובה אמיתית" else "המפתח הוצפן והחיבור עבר בדיקה חיה"
+                                        is AiCallResult.Failure -> if (savedProvider == AiProviderId.LOCAL_OPENAI) "החיבור נשמר, אך המנוע לא ענה: ${result.safeMessage}" else "המפתח הוצפן, אך החיבור נכשל: ${result.safeMessage}"
+                                    }
+                                }
                             }
-                        ) { Text("שמור מוצפן") }
+                        ) { Text(if (providerSelection == AiProviderId.LOCAL_OPENAI) "שמור חיבור מקומי" else "שמור מוצפן") }
                         OutlinedButton(onClick = {
                             ApiKeyManager.clearProviderKey(context, providerSelection)
                             apiKeyInput = ""
-                            keyStatus = "המפתח של ${providerSelection.name} נמחק"
+                            keyStatus = if (providerSelection == AiProviderId.LOCAL_OPENAI) "החיבור המקומי נמחק" else "המפתח של ${providerSelection.name} נמחק"
                         }) { Text("מחק ספק נבחר") }
                     }
                     OutlinedButton(
-                        enabled = ApiKeyManager.hasProviderKey(context, providerSelection),
+                        enabled = ApiKeyManager.hasProviderAccess(context, providerSelection),
                         onClick = {
                             ApiKeyManager.setActiveProvider(context, providerSelection)
                             keyStatus = "בודקת חיבור אמיתי ל-${providerSelection.name}…"
@@ -213,6 +323,33 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                             }
                         }
                     ) { Text("בדיקת חיבור אמיתית") }
+                    Button(
+                        enabled = ApiKeyManager.configuredProviders(context).isNotEmpty() && !testingAllProviders,
+                        onClick = {
+                            testingAllProviders = true
+                            providerHealth = emptyMap()
+                            scope.launch {
+                                val results = linkedMapOf<AiProviderId, String>()
+                                ApiKeyManager.configuredProviders(context).forEach { provider ->
+                                    results[provider] = "בודקת…"
+                                    providerHealth = results.toMap()
+                                    results[provider] = when (val result = OpenAiClient.getCompletionResult(
+                                        messages = listOf(ChatMessage("user", "Reply with exactly: OK")),
+                                        providerOverride = provider
+                                    )) {
+                                        is AiCallResult.Success -> "מחובר • התקבלה תשובה אמיתית"
+                                        is AiCallResult.Failure -> "${result.state} • ${result.safeMessage}"
+                                    }
+                                    providerHealth = results.toMap()
+                                }
+                                testingAllProviders = false
+                            }
+                        }
+                    ) { Text(if (testingAllProviders) "בודקת את כל המוחות…" else "בדיקת כל המוחות") }
+                    if (providerHealth.isNotEmpty() && !testingAllProviders) {
+                        val passed = providerHealth.values.count { it.startsWith("מחובר") }
+                        Text("תוצאת בדיקה: $passed מתוך ${providerHealth.size} חיבורים עובדים בפועל", color = if (passed == providerHealth.size) Color(0xFF70E1A1) else ChatGold)
+                    }
                     Text(
                         "אפשר לגלול בתוך חלון ההגדרות עד לכפתורי השמירה והבדיקה.",
                         color = Color.Gray,
@@ -253,6 +390,27 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
             Text(status, color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
 
+        if (attachments.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                attachments.forEach { attachment ->
+                    InputChip(
+                        selected = true,
+                        onClick = {},
+                        label = { Text("${attachment.displayName} • ${attachment.summary}", maxLines = 1) },
+                        trailingIcon = {
+                            IconButton(onClick = { attachments = attachments - attachment }) {
+                                Icon(Icons.Default.Close, contentDescription = "הסרת קובץ")
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+        attachmentStatus?.let { status ->
+            Text(status, color = ChatGold, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
+        }
+
         Row(
             Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -266,6 +424,10 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 enabled = !ui.isSending,
                 maxLines = 4
             )
+            IconButton(
+                enabled = !ui.isSending && attachments.size < SafeAttachmentInspector.MAX_FILES,
+                onClick = { attachmentPicker.launch(arrayOf("*/*")) }
+            ) { Icon(Icons.Default.AttachFile, contentDescription = "צירוף תמונה או קובץ") }
             IconButton(
                 enabled = !ui.isSending,
                 onClick = {
@@ -282,10 +444,12 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, contentDescription = "Voice")
             }
             IconButton(
-                enabled = input.isNotBlank() && !ui.isSending,
+                enabled = (input.isNotBlank() || attachments.isNotEmpty()) && !ui.isSending,
                 onClick = {
-                    vm.send(input, speakResponse = false)
+                    vm.send(input.ifBlank { "נתחי את הקבצים המצורפים" }, attachments, speakResponse = false)
                     input = ""
+                    attachments = emptyList()
+                    attachmentStatus = null
                 }
             ) { Icon(Icons.Default.Send, contentDescription = "Send") }
         }

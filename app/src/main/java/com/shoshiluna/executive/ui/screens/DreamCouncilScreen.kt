@@ -32,15 +32,15 @@ fun DreamCouncilScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text("EXECUTIVE COUNCIL", color = CouncilGold, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-            Text("Formal SHOSHI ↔ LUNA disagreement, challenge and escalation room", color = Color.Gray)
+            Text("מועצת שושי ולונה", color = CouncilGold, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            Text("מרחב מבוקר לדיון, מחלוקת, אתגר והסלמה", color = Color.Gray)
         }
         item {
             ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = CouncilPanel), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("CONVENE COUNCIL", color = CouncilGold, fontWeight = FontWeight.Bold)
+                    Text("כינוס המועצה", color = CouncilGold, fontWeight = FontWeight.Bold)
                     if (empire.missions.isEmpty()) {
-                        Text("Create a mission first. Council sessions are mission-scoped by design.", color = Color.Gray)
+                        Text("יש ליצור תחילה משימה; כל דיון מקושר למשימה מסוימת.", color = Color.Gray)
                     } else {
                         var expanded by remember { mutableStateOf(false) }
                         Box {
@@ -70,23 +70,23 @@ fun DreamCouncilScreen() {
             }
         }
         if (sessions.isEmpty()) {
-            item { Text("No council sessions yet.", color = Color.Gray) }
+            item { Text("אין עדיין דיוני מועצה.", color = Color.Gray) }
         }
         items(sessions.values.sortedByDescending { it.id }) { session ->
             ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = CouncilPanel), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(session.agenda, color = Color.White, fontWeight = FontWeight.Bold)
-                    Text("Session ${session.id.take(8)} • ${if (session.isActive) "ACTIVE" else session.outcome}", color = CouncilGold)
-                    Text("SHOSHI: ${session.votes[ExecutiveAgent.SHOSHI.id] ?: "Awaiting position"}", color = Color.LightGray)
-                    Text("LUNA: ${session.votes[ExecutiveAgent.LUNA.id] ?: "Awaiting position"}", color = Color.LightGray)
+                    Text("דיון ${session.id.take(8)} • ${if (session.isActive) "פעיל" else session.outcome}", color = CouncilGold)
+                    Text("SHOSHI: ${session.votes[ExecutiveAgent.SHOSHI.id] ?: "ממתינה לעמדה"}", color = Color.LightGray)
+                    Text("LUNA: ${session.votes[ExecutiveAgent.LUNA.id] ?: "ממתינה לעמדה"}", color = Color.LightGray)
                     if (session.isActive) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { CouncilEngine.castVote(session.id, ExecutiveAgent.SHOSHI.id, "SUPPORT") }) { Text("SHOSHI SUPPORT") }
-                            OutlinedButton(onClick = { CouncilEngine.castVote(session.id, ExecutiveAgent.LUNA.id, "CHALLENGE") }) { Text("LUNA CHALLENGE") }
+                            OutlinedButton(onClick = { CouncilEngine.castVote(session.id, ExecutiveAgent.SHOSHI.id, "SUPPORT") }) { Text("שושי תומכת") }
+                            OutlinedButton(onClick = { CouncilEngine.castVote(session.id, ExecutiveAgent.LUNA.id, "CHALLENGE") }) { Text("לונה מאתגרת") }
                         }
                     }
                     if (!session.isActive && session.outcome != null) {
-                        Text("Outcome: ${session.outcome}", color = if (session.outcome.name.contains("DISAGREEMENT")) Color(0xFFFFC866) else Color(0xFF70E1A1), fontWeight = FontWeight.Bold)
+                        Text("תוצאה: ${session.outcome}", color = if (session.outcome.name.contains("DISAGREEMENT")) Color(0xFFFFC866) else Color(0xFF70E1A1), fontWeight = FontWeight.Bold)
                     }
                 }
             }

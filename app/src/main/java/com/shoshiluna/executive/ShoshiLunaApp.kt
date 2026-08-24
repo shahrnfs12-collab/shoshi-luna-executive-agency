@@ -3,15 +3,18 @@ package com.shoshiluna.executive
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,12 +33,15 @@ import com.shoshiluna.executive.core.presentation.SpatialRenderer
 import com.shoshiluna.executive.core.presentation.VoiceEngine
 import com.shoshiluna.executive.core.health.RuntimeReadiness
 import com.shoshiluna.executive.core.hardening.MissionTransitionPolicy
+import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import com.shoshiluna.executive.ui.screens.BusinessCommandScreen
 import com.shoshiluna.executive.ui.screens.PipelineScreen
 import com.shoshiluna.executive.ui.screens.DreamCommandCenterScreen
 import com.shoshiluna.executive.ui.screens.DreamCouncilScreen
 import com.shoshiluna.executive.ui.screens.ExternalNetworkScreen
+import com.shoshiluna.executive.ui.screens.AiFabricDashboardScreen
 import com.shoshiluna.executive.ui.workingcore.WorkingCoreChatScreen
+import com.shoshiluna.executive.ui.NotificationPermissionGate
 
 private val Gold = Color(0xFFD8B45A)
 private val DeepGold = Color(0xFF8B6A25)
@@ -44,8 +50,9 @@ private val Panel = Color(0xFF111111)
 private val Soft = Color(0xFFE7E0D0)
 
 @Composable
-fun ShoshiLunaApp() {
+fun ShoshiLunaApp(initialTab: Int = 0, highlightedMissionId: String? = null) {
     val context = LocalContext.current
+    NotificationPermissionGate()
     LaunchedEffect(context) {
         VoiceEngine.initialize(context)
     }
@@ -64,7 +71,8 @@ fun ShoshiLunaApp() {
             onSurface = Soft,
         )
     ) {
-        var tab by remember { mutableIntStateOf(0) }
+        var tab by rememberSaveable { mutableIntStateOf(initialTab) }
+        LaunchedEffect(initialTab) { tab = initialTab.coerceIn(0, 5) }
         Scaffold(
             containerColor = Ink,
             bottomBar = {
@@ -86,7 +94,7 @@ fun ShoshiLunaApp() {
                 when (tab) {
                     0 -> DreamCommandCenterScreen()
                     1 -> WorkingCoreChatScreen()
-                    2 -> MissionsScreen()
+                    2 -> MissionsScreen(highlightedMissionId)
                     3 -> DreamCouncilScreen()
                     4 -> BusinessCommandScreen()
                     else -> MoreExecutiveScreen()
@@ -173,14 +181,14 @@ private fun ExecutiveCard(executive: ExecutiveAgent, image: Int, modifier: Modif
 private fun AgentsScreen() {
     val subAgents by MultiAgentCoordinator.subAgents.collectAsState()
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header("Executive Agents", "SHOSHI + LUNA + subordinate specialist agents") }
+        item { Header("הסוכנות המבצעות", "SHOSHI ו־LUNA עם סוכנים מומחים כפופים") }
         items(subAgents.values.toList()) { agent ->
             ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(agent.name, color = Gold, fontWeight = FontWeight.Bold)
-                    Text("Parent: ${agent.parentId ?: "None"}")
-                    Text("Role: ${agent.role}")
-                    Text("Permission rule: Child ⊆ Parent", style = MaterialTheme.typography.bodySmall)
+                    Text("סוכנת אם: ${agent.parentId ?: "ללא"}")
+                    Text("תפקיד: ${agent.role}")
+                    Text("כלל הרשאה: הרשאות הסוכן הכפוף אינן רחבות משל סוכנת האם", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -188,49 +196,65 @@ private fun AgentsScreen() {
 }
 
 @Composable
-private fun MissionsScreen() {
+private fun MissionsScreen(highlightedMissionId: String? = null) {
     val state by EmpireMissionControl.state.collectAsState()
+    val approvals by HumanApprovalGateway.requests.collectAsState()
+    val listState = rememberLazyListState()
     var title by remember { mutableStateOf("") }
     var owner by remember { mutableStateOf(ExecutiveAgent.SHOSHI) }
-    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header("Mission Control", "Evidence-first executive task orchestration") }
+    LaunchedEffect(highlightedMissionId, state.missions.size) {
+        val index = state.missions.indexOfFirst { it.id == highlightedMissionId }
+        if (index >= 0) listState.animateScrollToItem(index + 2)
+    }
+    LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { Header("מרכז המשימות", "ניהול עבודה מבוסס ראיות") }
         item {
             ElevatedCard(Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(title, { title = it }, label = { Text("מטרה / משימה") }, modifier = Modifier.fillMaxWidth())
+                    Text("שושי ולונה יחלקו את העבודה ביניהן, ימשיכו ברקע ויבקשו אישור לפני סיום או פעולה רגישה.", color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(owner == ExecutiveAgent.SHOSHI, { owner = ExecutiveAgent.SHOSHI }, label = { Text("SHOSHI") })
                         FilterChip(owner == ExecutiveAgent.LUNA, { owner = ExecutiveAgent.LUNA }, label = { Text("LUNA") })
                     }
                     Button(enabled = !state.emergencyHalt && title.isNotBlank(), onClick = { 
-                        val mission = EmpireMissionControl.createMission(title, owner.id)
-                        AgencyOrchestrator.startPipeline(mission.id)
-                        if (title.contains("שיתוף", ignoreCase = true) || title.contains("joint", ignoreCase = true)) {
-                            CollaborationEngine.startConsultation(mission.id, ExecutiveAgent.SHOSHI.id, ExecutiveAgent.LUNA.id, title)
-                        }
+                        AutonomousMissionEngine.submitGoal(title, owner)
                         title = "" 
-                    }) { Text("צור משימה") }
+                    }) { Text("התחילי משימה אוטונומית") }
                 }
             }
         }
         items(state.missions, key = { it.id }) { mission ->
-            ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
+            val pendingApproval = approvals.values.firstOrNull { it.missionId == mission.id && it.userDecision == null }
+            ElevatedCard(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).then(
+                    if (mission.id == highlightedMissionId) Modifier.border(2.dp, Gold, RoundedCornerShape(12.dp)) else Modifier
+                ),
+                colors = CardDefaults.elevatedCardColors(containerColor = Panel)
+            ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(mission.title, color = Gold, fontWeight = FontWeight.Bold)
-                    Text("${mission.ownerId} • ${mission.status} • Evidence required")
+                    Text("${mission.ownerId} • ${mission.status} • נדרשות ראיות")
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(
                             enabled = !state.emergencyHalt && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.RUNNING),
                             onClick = { EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Manual Start") }
                         ) { Text("הפעל") }
                         TextButton(
-                            enabled = !state.emergencyHalt && mission.status == MissionStatus.RUNNING,
+                            enabled = !state.emergencyHalt && mission.status == MissionStatus.RUNNING && mission.workPlan.isEmpty(),
                             onClick = { CollaborationEngine.startConsultation(mission.id, ExecutiveAgent.SHOSHI.id, ExecutiveAgent.LUNA.id, mission.title) }
                         ) { Text("שיתוף פעולה") }
                         TextButton(
-                            enabled = !state.emergencyHalt && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.COMPLETED),
+                            enabled = !state.emergencyHalt && pendingApproval == null && mission.status != MissionStatus.REVIEW && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.COMPLETED),
                             onClick = { EmpireMissionControl.transitionStatus(mission.id, MissionStatus.COMPLETED, "Manual Complete") }
                         ) { Text("הושלם") }
+                    }
+                    if (pendingApproval != null) {
+                        Text("נדרש אישור שלך לפני סיום המשימה", color = Gold, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { HumanApprovalGateway.provideDecision(pendingApproval.id, true) }) { Text("אישור התוצר") }
+                            OutlinedButton(onClick = { HumanApprovalGateway.provideDecision(pendingApproval.id, false) }) { Text("דחייה") }
+                        }
                     }
                 }
             }
@@ -242,9 +266,9 @@ private fun MissionsScreen() {
 private fun MoreExecutiveScreen() {
     var section by remember { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize()) {
-        Header("Executive Systems", "Specialists • Pipeline • Memory • Presence")
+        Header("מערכות הסוכנות", "מומחים • צנרת • זיכרון • נוכחות")
         ScrollableTabRow(selectedTabIndex = section, containerColor = Color(0xFF0B0B0B), contentColor = Gold) {
-            listOf("סוכנים", "צנרת", "רשת", "זיכרון", "נוכחות").forEachIndexed { index, label ->
+            listOf("סוכנים", "צנרת", "רשת", "זיכרון", "נוכחות", "AI Fabric").forEachIndexed { index, label ->
                 Tab(selected = section == index, onClick = { section = index }, text = { Text(label) })
             }
         }
@@ -254,7 +278,8 @@ private fun MoreExecutiveScreen() {
                 1 -> PipelineScreen()
                 2 -> ExternalNetworkScreen()
                 3 -> MemoryScreen()
-                else -> PresenceScreen()
+                4 -> PresenceScreen()
+                else -> AiFabricDashboardScreen()
             }
         }
     }
@@ -264,19 +289,19 @@ private fun MoreExecutiveScreen() {
 private fun CollaborationScreen() {
     val conversations by CommunicationBus.conversations.collectAsState()
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header("Executive Collaboration", "Real-time SHOSHI ↔ LUNA communication") }
+        item { Header("שיתוף פעולה", "תקשורת בזמן אמת בין SHOSHI ל־LUNA") }
         
         if (conversations.isEmpty()) {
             item {
                 Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                    Text("No active collaborations.", color = Color.Gray)
+                    Text("אין כרגע שיתופי פעולה פעילים.", color = Color.Gray)
                 }
             }
         }
         
         conversations.values.forEach { conversation ->
             item {
-                Text("Conversation: ${conversation.id.take(8)}", color = Gold, modifier = Modifier.padding(16.dp))
+                Text("שיחה: ${conversation.id.take(8)}", color = Gold, modifier = Modifier.padding(16.dp))
             }
             items(conversation.messages) { message ->
                 MessageBubble(message)
@@ -321,7 +346,7 @@ private fun MemoryScreen() {
     var partition by remember { mutableStateOf(MemoryPartition.SHOSHI_PRIVATE) }
     
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { Header("Sovereign Memory", "Private SHOSHI / Private LUNA / Shared memory") }
+        item { Header("זיכרון ריבוני", "זיכרון פרטי ל־SHOSHI / פרטי ל־LUNA / משותף") }
         item {
             ElevatedCard(Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -329,7 +354,7 @@ private fun MemoryScreen() {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         FilterChip(partition == MemoryPartition.SHOSHI_PRIVATE, { partition = MemoryPartition.SHOSHI_PRIVATE; owner = ExecutiveAgent.SHOSHI }, label = { Text("SHOSHI") })
                         FilterChip(partition == MemoryPartition.LUNA_PRIVATE, { partition = MemoryPartition.LUNA_PRIVATE; owner = ExecutiveAgent.LUNA }, label = { Text("LUNA") })
-                        FilterChip(partition == MemoryPartition.EXECUTIVE_SHARED, { partition = MemoryPartition.EXECUTIVE_SHARED; owner = null }, label = { Text("SHARED") })
+                        FilterChip(partition == MemoryPartition.EXECUTIVE_SHARED, { partition = MemoryPartition.EXECUTIVE_SHARED; owner = null }, label = { Text("משותף") })
                     }
                     Button(enabled = text.isNotBlank(), onClick = { 
                         SovereignMemoryVault.record(SovereignMemory(partition = partition, agentId = owner?.id ?: "SHARED", content = text.trim()))
@@ -379,23 +404,23 @@ private fun PresenceScreen() {
     val voiceState by VoiceEngine.voiceState.collectAsState()
     
     Column(Modifier.fillMaxSize()) {
-        Header("Digital Presence", "Digital Human + Voice runtime monitoring")
+        Header("נוכחות דיגיטלית", "ניטור דמויות, תנועה וקול בזמן אמת")
         
-        Row(
-            Modifier.fillMaxWidth().height(380.dp).padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            PhotorealPresenceCard("SHOSHI", R.drawable.shoshi_executive, shoshiState.name, Modifier.weight(1f))
-            PhotorealPresenceCard("LUNA", R.drawable.luna_executive, lunaState.name, Modifier.weight(1f))
+        Box(Modifier.fillMaxWidth().height(420.dp).padding(horizontal = 16.dp)) {
+            SpatialRenderer(Modifier.fillMaxSize())
+            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("SHOSHI • ${shoshiState.name}", color = Gold, modifier = Modifier.background(Ink.copy(alpha = 0.75f)).padding(8.dp))
+                Text("LUNA • ${lunaState.name}", color = Gold, modifier = Modifier.background(Ink.copy(alpha = 0.75f)).padding(8.dp))
+            }
         }
 
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 ElevatedCard(Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("VOICE SYSTEM", color = Gold, fontWeight = FontWeight.Black)
+                        Text("מערכת הקול", color = Gold, fontWeight = FontWeight.Black)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Status:", color = Color.White)
+                            Text("מצב:", color = Color.White)
                             Text(voiceState.name, color = if (voiceState.name == "ERROR") Color.Red else Color.Green)
                         }
                     }
@@ -404,14 +429,14 @@ private fun PresenceScreen() {
             item {
                 ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("PHOTOREALISM AUDIT", color = Gold, fontWeight = FontWeight.Black)
-                        Text("MASTER VISUALS: VERIFIED (photoreal SHOSHI + LUNA)")
+                        Text("בדיקת נוכחות חזותית", color = Gold, fontWeight = FontWeight.Black)
+                        Text("נכסי המאסטר: אומתו — SHOSHI ו־LUNA")
                         val readiness = RuntimeReadiness.inspect(LocalContext.current)
                         readiness.items.filter { it.name.startsWith("3D") }.forEach { item ->
                             Text("${item.name}: ${if (item.ready) "READY" else "NOT READY"} — ${item.detail}")
                         }
-                        Text("RENDERER CODE: PACKAGED; runtime build still requires dependency resolution")
-                        Text("VOICE IDENTITY: CONFIGURED IN CODE — RUNTIME TEST REQUIRED")
+                        Text("מנוע התצוגה: נכלל בחבילה; הזמינות נקבעת לפי בדיקת המכשיר")
+                        Text("זהות קולית: מוגדרת; מצב ההרצה מוצג למעלה")
                     }
                 }
             }

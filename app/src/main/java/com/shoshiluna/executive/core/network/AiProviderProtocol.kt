@@ -15,6 +15,14 @@ object AiProviderProtocols {
         require(model.isNotBlank() && authenticationHeader.matches(Regex("[A-Za-z0-9-]+")))
         return AiProviderProtocol(url.toString(), model.trim(), authenticationHeader, authenticationPrefix)
     }
+    fun local(endpoint: String, model: String): AiProviderProtocol {
+        val url = java.net.URI(endpoint.trim())
+        require(url.scheme == "https" && !url.host.isNullOrBlank() && url.userInfo == null && url.fragment == null) {
+            "Local endpoint must be a clean HTTPS URL"
+        }
+        require(model.isNotBlank())
+        return AiProviderProtocol(url.toString(), model.trim(), "Authorization", "Bearer ")
+    }
     fun forProvider(provider: AiProviderId): AiProviderProtocol = when (provider) {
         AiProviderId.OPENAI -> AiProviderProtocol(
             endpoint = "https://api.openai.com/v1/responses",
@@ -28,16 +36,17 @@ object AiProviderProtocols {
             authenticationHeader = "x-api-key"
         )
         AiProviderId.GOOGLE_GEMINI -> AiProviderProtocol(
-            endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
-            defaultModel = "gemini-3.5-flash",
+            endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent",
+            defaultModel = "gemini-3.7-flash",
             authenticationHeader = "x-goog-api-key"
         )
         AiProviderId.OPENROUTER -> AiProviderProtocol(
             endpoint = "https://openrouter.ai/api/v1/chat/completions",
-            defaultModel = "openai/gpt-5.6-luna",
+            defaultModel = "openrouter/auto",
             authenticationHeader = "Authorization",
             authenticationPrefix = "Bearer "
         )
+        AiProviderId.LOCAL_OPENAI -> throw IllegalArgumentException("Local provider requires an explicit endpoint")
         AiProviderId.CUSTOM -> throw IllegalArgumentException("Custom provider requires an explicit endpoint")
     }
 }
