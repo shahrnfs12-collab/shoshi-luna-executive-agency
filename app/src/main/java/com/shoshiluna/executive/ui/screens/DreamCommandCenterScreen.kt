@@ -25,6 +25,7 @@ import com.shoshiluna.executive.core.agent.*
 import com.shoshiluna.executive.core.audit.AuditTrail
 import com.shoshiluna.executive.core.business.EvidenceRegistry
 import com.shoshiluna.executive.core.business.ArtifactFactory
+import com.shoshiluna.executive.core.business.ToolGateway
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.empire.MissionStatus
 import com.shoshiluna.executive.core.dream.ExecutiveBriefEngine
@@ -56,6 +57,7 @@ fun DreamCommandCenterScreen() {
     val readiness = remember { RuntimeReadiness.inspect(context) }
     val aiReady = readiness.items.firstOrNull { it.name == "AI provider" }?.ready == true
     val spatialReady = readiness.items.filter { it.name.startsWith("3D ") }.all { it.ready }
+    val registeredTools = remember { ToolGateway.registeredTools() }
 
     val activeMissions = empire.missions.count { it.status !in terminalMissionStatuses }
     val waitingMissions = empire.missions.count { it.status in waitingMissionStatuses }
@@ -163,6 +165,11 @@ fun DreamCommandCenterScreen() {
                 DreamStatusLine("AI Provider", readiness.items.firstOrNull { it.name == "AI provider" }?.ready == true, readiness.items.firstOrNull { it.name == "AI provider" }?.detail ?: "Unknown")
                 DreamStatusLine("Trusted External Agents", trustedExternal > 0, "$trustedExternal trusted / ${externalAgents.size} registered")
                 DreamStatusLine("Verified Evidence", verifiedEvidence > 0, "$verifiedEvidence verified records")
+                DreamStatusLine(
+                    "Execution Tools",
+                    registeredTools.any { ToolGateway.hasRuntimeAdapter(it.id) },
+                    "${registeredTools.count { ToolGateway.hasRuntimeAdapter(it.id) }} connected / ${registeredTools.size} registered"
+                )
                 DreamStatusLine("Sovereign Memory", true, "${memories.size} protected memories")
                 DreamStatusLine("2D Executive Presence", true, "Production UI")
                 DreamStatusLine("Spatial 3D World", spatialReady, if (spatialReady) "SHOSHI and LUNA GLB assets packaged and runtime-gated" else "One or more GLB assets are unavailable")
