@@ -3,6 +3,7 @@ package com.shoshiluna.executive.core.business
 import com.shoshiluna.executive.core.audit.AuditTrail
 import com.shoshiluna.executive.core.audit.ExecutiveAudit
 import java.util.UUID
+import com.shoshiluna.executive.core.fabric.AgencyGrowthAutopilot
 
 /**
  * Service for verifying that allocated treasury funds have physically arrived.
@@ -16,6 +17,7 @@ object TreasuryVerificationService {
 
         val auditId = UUID.randomUUID().toString()
         TreasuryLedger.updateAllocationStatus(allocationId, TreasuryStatus.FUNDED, evidenceRef)
+        AgencyGrowthAutopilot.evaluateFundedGrowthPool()
         
         AuditTrail.append(
             ExecutiveAudit(
