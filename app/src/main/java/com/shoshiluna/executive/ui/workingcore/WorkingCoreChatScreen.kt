@@ -27,6 +27,9 @@ import com.shoshiluna.executive.core.agent.ExecutiveAgent
 import com.shoshiluna.executive.core.network.AiConnectionState
 import com.shoshiluna.executive.core.network.AiProviderId
 import com.shoshiluna.executive.core.network.AiProviderRegistry
+import com.shoshiluna.executive.core.network.AiCallResult
+import com.shoshiluna.executive.core.network.ChatMessage
+import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.presentation.VoiceEngine
 import com.shoshiluna.executive.core.security.ApiKeyManager
 import com.shoshiluna.executive.core.voice.AndroidSpeechToTextEngine
@@ -34,6 +37,7 @@ import com.shoshiluna.executive.core.voice.AudioPermissionState
 import com.shoshiluna.executive.core.voice.SttState
 import com.shoshiluna.executive.core.voice.rememberAudioPermissionFlow
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private val ChatGold = Color(0xFFD8B45A)
 private val ChatPanel = Color(0xFF111111)
@@ -41,6 +45,7 @@ private val ChatPanel = Color(0xFF111111)
 @Composable
 fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val ui by vm.uiState.collectAsState()
     val stt = remember(context) { AndroidSpeechToTextEngine(context, Locale.forLanguageTag("he-IL")) }
     val sttState by stt.state.collectAsState()
@@ -169,6 +174,21 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                             keyStatus = "המפתח של ${providerSelection.name} נמחק"
                         }) { Text("מחק ספק נבחר") }
                     }
+                    OutlinedButton(
+                        enabled = ApiKeyManager.hasProviderKey(context, providerSelection),
+                        onClick = {
+                            ApiKeyManager.setActiveProvider(context, providerSelection)
+                            keyStatus = "בודקת חיבור אמיתי ל-${providerSelection.name}…"
+                            scope.launch {
+                                keyStatus = when (val result = OpenAiClient.getCompletionResult(
+                                    messages = listOf(ChatMessage("user", "Reply with exactly: OK"))
+                                )) {
+                                    is AiCallResult.Success -> "החיבור ל-${providerSelection.name} אומת בתשובת שרת אמיתית"
+                                    is AiCallResult.Failure -> result.safeMessage
+                                }
+                            }
+                        }
+                    ) { Text("בדיקת חיבור אמיתית") }
                 }
             }
         } else {
