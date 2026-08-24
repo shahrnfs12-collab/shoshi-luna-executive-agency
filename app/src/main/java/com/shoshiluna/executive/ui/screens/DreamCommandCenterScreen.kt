@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -45,6 +46,7 @@ import com.shoshiluna.executive.core.evolution.EvolutionEngine
 import com.shoshiluna.executive.core.evolution.LearningStatus
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import android.graphics.BitmapFactory
 
 private val DreamGold = Color(0xFFE2C06B)
 private val DreamInk = Color(0xFF050608)
@@ -416,17 +418,13 @@ private fun ExecutiveVisionCarousel(
                     }
                 }
             }
-            Image(
-                painterResource(R.drawable.shoshi_cutout),
-                "SHOSHI",
-                Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f),
-                contentScale = ContentScale.Fit
+            SafeRasterExecutive(
+                R.drawable.shoshi_cutout, "SHOSHI",
+                Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f)
             )
-            Image(
-                painterResource(R.drawable.luna_cutout),
-                "LUNA",
-                Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f),
-                contentScale = ContentScale.Fit
+            SafeRasterExecutive(
+                R.drawable.luna_cutout, "LUNA",
+                Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f)
             )
             Button(
                 onClick = { onOpen(pagerState.currentPage) },
@@ -452,10 +450,27 @@ private fun ExecutiveVisionCarousel(
 }
 
 @Composable
+private fun SafeRasterExecutive(resourceId: Int, description: String, modifier: Modifier, contentScale: ContentScale = ContentScale.Fit) {
+    val context = LocalContext.current
+    val bitmap = remember(resourceId) {
+        runCatching {
+            context.resources.openRawResource(resourceId).use { stream -> BitmapFactory.decodeStream(stream) }
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(bitmap.asImageBitmap(), description, modifier, contentScale = contentScale)
+    } else {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Person, description, tint = DreamGold.copy(alpha = 0.65f), modifier = Modifier.size(72.dp))
+        }
+    }
+}
+
+@Composable
 private fun DreamAgentCard(name: String, role: String, image: Int, score: Float?, modifier: Modifier = Modifier) {
     ElevatedCard(modifier, colors = CardDefaults.elevatedCardColors(containerColor = DreamGlass), shape = RoundedCornerShape(22.dp)) {
         Column {
-            Image(painterResource(image), name, Modifier.fillMaxWidth().height(235.dp), contentScale = ContentScale.Crop)
+            SafeRasterExecutive(image, name, Modifier.fillMaxWidth().height(235.dp), ContentScale.Crop)
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(name, color = DreamGold, fontWeight = FontWeight.Black)
                 Text(role, color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
