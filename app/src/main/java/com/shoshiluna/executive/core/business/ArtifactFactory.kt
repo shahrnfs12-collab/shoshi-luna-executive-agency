@@ -3,6 +3,9 @@ package com.shoshiluna.executive.core.business
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
+import android.content.Context
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 enum class ArtifactType {
     PROPOSAL,
@@ -34,9 +37,22 @@ data class Artifact(
  */
 object ArtifactFactory {
     private val artifactStore = CopyOnWriteArrayList<Artifact>()
+    @Volatile private var appContext: Context? = null
+    private val gson = Gson()
 
     val artifacts: List<Artifact>
         get() = artifactStore.toList()
+
+    @Synchronized
+    fun initialize(context: Context) {
+        if (appContext != null) return
+        appContext = context.applicationContext
+        val json = prefs().getString(KEY_ARTIFACTS, null) ?: return
+        val type = object : TypeToken<List<Artifact>>() {}.type
+        runCatching { gson.fromJson<List<Artifact>>(json, type) }.getOrNull()?.let {
+            artifactStore.clear(); artifactStore.addAll(it)
+        }
+    }
 
     fun createArtifact(
         type: ArtifactType,
@@ -72,6 +88,7 @@ object ArtifactFactory {
             hash = sha256(canonicalPayload)
         )
         artifactStore.add(artifact)
+        persist()
         return artifact
     }
 
@@ -90,8 +107,21 @@ object ArtifactFactory {
 
     internal fun resetForTest() = artifactStore.clear()
 
+    private fun persist() {
+        val context = appContext ?: return
+        check(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(KEY_ARTIFACTS, gson.toJson(artifactStore.toList())).commit()) {
+            "Artifact persistence failed"
+        }
+    }
+
+    private fun prefs() = requireNotNull(appContext).getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
     private fun sha256(value: String): String = MessageDigest
         .getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+
+    private const val PREFS_NAME = "agency_artifacts_v1"
+    private const val KEY_ARTIFACTS = "artifacts"
 }
