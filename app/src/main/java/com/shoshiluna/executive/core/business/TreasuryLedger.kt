@@ -31,6 +31,15 @@ object TreasuryLedger {
             .sumOf { it.allocationAmount }
     }
 
+    /** Spendable truth: verified real funding minus verified/executed real spend proposals. */
+    fun availableFundedBalance(): Double {
+        val funded = _allocations.value.filter { it.status == TreasuryStatus.FUNDED && it.environment == Environment.REAL }
+            .sumOf { it.allocationAmount }
+        val committed = _spendProposals.value.filter { it.status in setOf(SpendStatus.EXECUTED, SpendStatus.VERIFIED) }
+            .sumOf { it.amount }
+        return (funded - committed).coerceAtLeast(0.0)
+    }
+
     /**
      * Perform the 5% allocation based on verified net profit.
      * Rule: Only RECEIVED revenue and VERIFIED costs.
