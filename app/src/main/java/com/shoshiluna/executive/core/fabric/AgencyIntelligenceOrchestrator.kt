@@ -14,6 +14,8 @@ import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 data class BrainAssignment(val role: String, val modelId: String, val providerId: String, val objective: String)
 data class BrainContribution(val assignment: BrainAssignment, val result: AiCallResult)
@@ -90,5 +92,58 @@ object AiProcurementPlanner {
             "SHOSHI", ApprovalRiskLevel.HIGH, "Uses verified FUNDED treasury; expected benefit: $expectedBenefit", missionId)
         FabricAuditLedger.append("AI_PROCUREMENT_PROPOSED", missionId, modelId, approval, "AMOUNT_USD=$monthlyCostUsd;NO_PAYMENT_EXECUTED")
         return Result.success(AiProcurementProposal(spend.id, approval, modelId, monthlyCostUsd, available))
+    }
+}
+
+data class GrowthCapabilityNeed(
+    val id: String = UUID.randomUUID().toString(),
+    val missionId: String,
+    val modelId: String,
+    val quotedMonthlyUsd: Double,
+    val quoteEvidence: String,
+    val expectedBenefit: String
+)
+
+/** Queues evidence-backed capability needs before revenue exists and proposes them only after the 5% fund is truly FUNDED. */
+object AgencyGrowthAutopilot {
+    private val queued = ConcurrentHashMap<String, GrowthCapabilityNeed>()
+    private val proposed = ConcurrentHashMap.newKeySet<String>()
+
+    fun registerNeed(need: GrowthCapabilityNeed) {
+        require(need.quotedMonthlyUsd > 0.0 && need.quoteEvidence.isNotBlank() && need.expectedBenefit.isNotBlank())
+        requireNotNull(ModelRegistry.get(need.modelId)) { "Model must be documented before procurement" }
+        queued[need.id] = need
+        FabricAuditLedger.append("AI_GROWTH_NEED_QUEUED", need.missionId, need.modelId, outcome = "WAITING_FOR_5_PERCENT_FUNDED")
+    }
+
+    /** Returns proposals created now. Never performs a purchase. */
+    fun evaluateFundedGrowthPool(): List<AiProcurementProposal> = queued.values
+        .sortedBy { it.quotedMonthlyUsd }
+        .mapNotNull { need ->
+            if (need.id in proposed) return@mapNotNull null
+            AiProcurementPlanner.propose(need.missionId, need.modelId, need.quotedMonthlyUsd,
+                "${need.expectedBenefit}; quote evidence=${need.quoteEvidence}").getOrNull()?.also { proposed += need.id }
+        }
+
+    fun resetForTest() { queued.clear(); proposed.clear() }
+}
+
+/** Converts an owner-approved growth proposal into the durable financial pipeline; payment still requires biometric proof and a configured adapter. */
+object AiPurchasePreparation {
+    fun prepareFinancialProposal(procurement: AiProcurementProposal, missionId: String, vendorAccount: String): Result<com.shoshiluna.executive.core.business.FinancialProposal> {
+        if (!HumanApprovalGateway.isApproved(procurement.approvalId)) return Result.failure(SecurityException("Owner approval required"))
+        val spend = TreasuryLedger.spendProposals.value.firstOrNull { it.id == procurement.spendProposalId }
+            ?: return Result.failure(IllegalArgumentException("Spend proposal missing"))
+        if (spend.status != SpendStatus.PROPOSED) return Result.failure(SecurityException("Spend proposal is not eligible"))
+        if (procurement.monthlyCostUsd > procurement.availableFundedUsd || procurement.monthlyCostUsd > TreasuryLedger.availableFundedBalance() + spend.amount) {
+            return Result.failure(SecurityException("5% FUNDED growth balance is insufficient"))
+        }
+        TreasuryLedger.updateSpendStatus(spend.id, SpendStatus.APPROVED)
+        return Result.success(com.shoshiluna.executive.core.business.FinancialProposal(
+            proposalId = spend.id, missionId = missionId, correlationId = procurement.approvalId,
+            amountMinorUnits = (procurement.monthlyCostUsd * 100).toLong(), currency = "USD",
+            sourceAccount = "AGENCY_5_PERCENT_GROWTH_FUND", destinationAccount = vendorAccount,
+            mode = com.shoshiluna.executive.core.business.ExecutionMode.REAL
+        ))
     }
 }
