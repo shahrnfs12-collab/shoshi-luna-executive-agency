@@ -14,6 +14,7 @@ import com.shoshiluna.executive.core.external.ExternalOperationJournal
 import com.shoshiluna.executive.core.external.GenericHttpsAgentAdapter
 import com.shoshiluna.executive.core.github.GitHubCredentialStore
 import com.shoshiluna.executive.core.github.GitHubConnectorAdapter
+import com.shoshiluna.executive.core.video.VideoWorkspace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,10 +22,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 
-/**
- * ShoshiLuna Executive Engine.
- * Thread-safe atomic state management for the agency.
- */
 object TitanEngine {
     private val startTime = System.currentTimeMillis()
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -32,13 +29,10 @@ object TitanEngine {
 
     private val _networkLatency = MutableStateFlow(0L)
     val networkLatency = _networkLatency.asStateFlow()
-
     private val _cpuLoad = MutableStateFlow(5)
     val cpuLoad = _cpuLoad.asStateFlow()
-
     private val _isChatActive = MutableStateFlow(false)
     val isChatActive = _isChatActive.asStateFlow()
-
     private val _systemStatus = MutableStateFlow("HEALTHY")
     val systemStatus = _systemStatus.asStateFlow()
 
@@ -48,33 +42,20 @@ object TitanEngine {
         ArtifactFactory.initialize(context)
         EvolutionEngine.initialize(context)
         HumanApprovalGateway.initialize(context)
+        VideoWorkspace.initialize(context)
         BuiltInToolBootstrap.initialize()
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
         ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
-
-        // First-class owner-scoped GitHub tool. Authentication is configured once
-        // and persisted only in encrypted device storage, never in source control.
         GitHubCredentialStore.initialize(context)
         ConnectorRegistry.register(GitHubConnectorAdapter())
-        // Core network + memory + controlled external-agent runtime are initialized from the application context.
     }
 
-    fun setChatActive(active: Boolean) {
-        _isChatActive.value = active
-    }
-
+    fun setChatActive(active: Boolean) { _isChatActive.value = active }
     fun applicationContext(): Context? = appContext
-
-    fun reportLatency(latency: Long) {
-        _networkLatency.value = latency
-    }
-
-    fun updateCpuLoad(load: Int) {
-        _cpuLoad.value = load
-    }
-
+    fun reportLatency(latency: Long) { _networkLatency.value = latency }
+    fun updateCpuLoad(load: Int) { _cpuLoad.value = load }
     fun getUptimeString(): String {
         val seconds = (System.currentTimeMillis() - startTime) / 1000
         val h = seconds / 3600
