@@ -26,11 +26,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.shoshiluna.executive.R
 import com.shoshiluna.executive.core.agent.ExecutiveAgent
+import com.shoshiluna.executive.core.github.GitHubCredentialStore
 import com.shoshiluna.executive.core.network.AiConnectionState
 import com.shoshiluna.executive.core.network.AiProviderId
 import com.shoshiluna.executive.core.network.AiProviderRegistry
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.ChatMessage
+import com.shoshiluna.executive.core.network.ConnectorRegistry
 import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.presentation.VoiceEngine
 import com.shoshiluna.executive.core.security.ApiKeyManager
@@ -58,6 +60,15 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var customEndpoint by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
     var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
+
+    var showGitHubSettings by remember { mutableStateOf(false) }
+    var githubTokenInput by remember { mutableStateOf("") }
+    var githubRepoInput by remember {
+        mutableStateOf(GitHubCredentialStore.repository() ?: "shahrnfs12-collab/shoshi-luna-executive-agency")
+    }
+    var githubStatus by remember {
+        mutableStateOf(if (GitHubCredentialStore.isConfigured()) "GitHub: מוגדר ומוצפן" else "GitHub: לא מוגדר")
+    }
 
     fun beginListening() {
         VoiceEngine.stopSpeech()
@@ -225,6 +236,88 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                 onClick = { showApiSettings = true },
                 modifier = Modifier.padding(horizontal = 12.dp)
             ) { Text("הגדרות חיבור AI") }
+        }
+
+        if (showGitHubSettings) {
+            ElevatedCard(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = ChatPanel)
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 330.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("GitHub Agent Connector", color = ChatGold, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { showGitHubSettings = false }) { Text("סגירה") }
+                    }
+                    Text(
+                        "חיבור חד-פעמי. לאחר שמירה, שושי ולונה משתמשות באותו credential המוצפן בלי התחברות מחדש בכל פעולה.",
+                        color = Color.LightGray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    OutlinedTextField(
+                        value = githubRepoInput,
+                        onValueChange = { githubRepoInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Repository — owner/name") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = githubTokenInput,
+                        onValueChange = { githubTokenInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("GitHub token") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true
+                    )
+                    Text(githubStatus, color = ChatGold, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = githubTokenInput.isNotBlank() && githubRepoInput.isNotBlank(),
+                            onClick = {
+                                githubStatus = runCatching {
+                                    GitHubCredentialStore.save(githubTokenInput, githubRepoInput)
+                                    githubTokenInput = ""
+                                    "GitHub: נשמר מוצפן"
+                                }.getOrElse { "GitHub: ${it.message ?: "שמירה נכשלה"}" }
+                            }
+                        ) { Text("שמור GitHub מוצפן") }
+                        OutlinedButton(
+                            enabled = GitHubCredentialStore.isConfigured(),
+                            onClick = {
+                                githubStatus = "GitHub: בודקת חיבור אמיתי…"
+                                scope.launch {
+                                    githubStatus = runCatching {
+                                        val result = ConnectorRegistry.callConnector("github", mapOf("operation" to "repo"))
+                                        if (result.contains("\"full_name\"")) "GitHub: CONNECTED — repository verified" else "GitHub: תשובה התקבלה אך לא אומתה"
+                                    }.getOrElse { "GitHub: ${it.message ?: "connection failed"}" }
+                                }
+                            }
+                        ) { Text("בדיקת GitHub") }
+                    }
+                    TextButton(onClick = {
+                        GitHubCredentialStore.clear()
+                        githubTokenInput = ""
+                        githubStatus = "GitHub: נמחק מהמכשיר"
+                    }) { Text("מחק חיבור GitHub") }
+                }
+            }
+        } else {
+            TextButton(
+                onClick = { showGitHubSettings = true },
+                modifier = Modifier.padding(horizontal = 12.dp)
+            ) {
+                Text(if (GitHubCredentialStore.isConfigured()) "GitHub: מחובר" else "חיבור GitHub")
+            }
         }
 
         LazyColumn(
