@@ -14,8 +14,8 @@ import org.junit.Before
 import org.junit.Test
 
 class AgencyIntelligenceOrchestratorTest {
-    @Before fun setup() { TreasuryLedger.resetForTest(); HumanApprovalGateway.resetForTest() }
-    @After fun cleanup() { TreasuryLedger.resetForTest(); HumanApprovalGateway.resetForTest() }
+    @Before fun setup() { TreasuryLedger.resetForTest(); HumanApprovalGateway.resetForTest(); AgencyGrowthAutopilot.resetForTest() }
+    @After fun cleanup() { TreasuryLedger.resetForTest(); HumanApprovalGateway.resetForTest(); AgencyGrowthAutopilot.resetForTest() }
 
     @Test fun procurementFailsClosedWhenTreasuryIsNotFunded() {
         val result = AiProcurementPlanner.propose("mission", "openai/gpt-5.6-luna", 1.0, "Hebrew research")
@@ -38,5 +38,18 @@ class AgencyIntelligenceOrchestratorTest {
         assertTrue(result.isSuccess)
         assertEquals(SpendStatus.PROPOSED, TreasuryLedger.spendProposals.value.single().status)
         assertTrue(!HumanApprovalGateway.isApproved(result.getOrThrow().approvalId))
+    }
+
+    @Test fun growthNeedWaitsForRevenueAndUsesOnlyFivePercentFund() {
+        AgencyGrowthAutopilot.registerNeed(GrowthCapabilityNeed(missionId = "m", modelId = "openai/gpt-5.6-luna",
+            quotedMonthlyUsd = 5.0, quoteEvidence = "official-quote-hash", expectedBenefit = "Faster work"))
+        assertTrue(AgencyGrowthAutopilot.evaluateFundedGrowthPool().isEmpty())
+        assertTrue(TreasuryLedger.spendProposals.value.isEmpty())
+        val revenue = RevenueRecord(amount = 1_000.0, status = RevenueStatus.RECEIVED, missionId = "m", environment = Environment.REAL, verificationRef = "verified")
+        val allocation = requireNotNull(TreasuryLedger.performAllocation(listOf(revenue), emptyList(), Environment.REAL))
+        assertEquals(50.0, allocation.allocationAmount, 0.0)
+        TreasuryLedger.updateAllocationStatus(allocation.id, TreasuryStatus.FUNDED, "bank-proof")
+        assertEquals(1, AgencyGrowthAutopilot.evaluateFundedGrowthPool().size)
+        assertEquals(45.0, TreasuryLedger.availableFundedBalance(), 0.0)
     }
 }
