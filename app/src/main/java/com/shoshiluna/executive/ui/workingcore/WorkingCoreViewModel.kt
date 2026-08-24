@@ -108,7 +108,8 @@ class WorkingCoreViewModel(
         activeRequest = viewModelScope.launch {
             // Attachments are deliberately represented as verified metadata here. Binary files are never
             // executed; provider-specific image/document extraction is handled by a separate sandboxed tool.
-            when (val result = gateway.send(agent, visiblePrompt)) {
+            val visualInputs = attachments.flatMap { it.visualInputs }
+            when (val result = gateway.sendWithImages(agent, visiblePrompt, visualInputs)) {
                 is AiCallResult.Success -> {
                     val answer = WorkingCoreMessage(agent = agent, fromUser = false, text = result.text)
                     val partition = if (agent == ExecutiveAgent.SHOSHI) MemoryPartition.SHOSHI_PRIVATE else MemoryPartition.LUNA_PRIVATE
