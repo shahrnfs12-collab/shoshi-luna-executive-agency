@@ -8,6 +8,7 @@ import com.shoshiluna.executive.core.evolution.EvolutionEngine
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import com.shoshiluna.executive.core.fabric.AgencyBrainCouncil
 import com.shoshiluna.executive.core.fabric.AgencyGrowthAutopilot
+import com.shoshiluna.executive.core.fabric.ModelRegistry
 import com.shoshiluna.executive.core.business.BuiltInToolBootstrap
 import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
@@ -56,6 +57,7 @@ object TitanEngine {
         boot("approvals") { HumanApprovalGateway.initialize(context) }
         boot("brain_council") { AgencyBrainCouncil.initialize(context) }
         boot("growth_fund") { AgencyGrowthAutopilot.initialize(context) }
+        boot("model_registry") { ModelRegistry.initialize(context) }
         boot("tools") { BuiltInToolBootstrap.initialize() }
         boot("memory") { SovereignMemoryVault.initialize(context) }
         boot("ai_network") { OpenAiClient.initialize(context) }
