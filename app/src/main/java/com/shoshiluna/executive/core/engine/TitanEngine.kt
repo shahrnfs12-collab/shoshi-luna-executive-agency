@@ -8,9 +8,12 @@ import com.shoshiluna.executive.core.evolution.EvolutionEngine
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import com.shoshiluna.executive.core.business.BuiltInToolBootstrap
 import com.shoshiluna.executive.core.network.OpenAiClient
+import com.shoshiluna.executive.core.network.ConnectorRegistry
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
 import com.shoshiluna.executive.core.external.ExternalOperationJournal
 import com.shoshiluna.executive.core.external.GenericHttpsAgentAdapter
+import com.shoshiluna.executive.core.github.GitHubCredentialStore
+import com.shoshiluna.executive.core.github.GitHubConnectorAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -50,11 +53,16 @@ object TitanEngine {
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
         ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
+
+        // First-class owner-scoped GitHub tool. Authentication is configured once
+        // and persisted only in encrypted device storage, never in source control.
+        GitHubCredentialStore.initialize(context)
+        ConnectorRegistry.register(GitHubConnectorAdapter())
         // Core network + memory + controlled external-agent runtime are initialized from the application context.
     }
 
-    fun setChatActive(active: Boolean) { 
-        _isChatActive.value = active 
+    fun setChatActive(active: Boolean) {
+        _isChatActive.value = active
     }
 
     fun applicationContext(): Context? = appContext
