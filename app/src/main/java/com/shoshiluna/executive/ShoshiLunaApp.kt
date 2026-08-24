@@ -3,15 +3,18 @@ package com.shoshiluna.executive
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +49,7 @@ private val Panel = Color(0xFF111111)
 private val Soft = Color(0xFFE7E0D0)
 
 @Composable
-fun ShoshiLunaApp() {
+fun ShoshiLunaApp(initialTab: Int = 0, highlightedMissionId: String? = null) {
     val context = LocalContext.current
     NotificationPermissionGate()
     LaunchedEffect(context) {
@@ -67,7 +70,8 @@ fun ShoshiLunaApp() {
             onSurface = Soft,
         )
     ) {
-        var tab by remember { mutableIntStateOf(0) }
+        var tab by rememberSaveable { mutableIntStateOf(initialTab) }
+        LaunchedEffect(initialTab) { tab = initialTab.coerceIn(0, 5) }
         Scaffold(
             containerColor = Ink,
             bottomBar = {
@@ -89,7 +93,7 @@ fun ShoshiLunaApp() {
                 when (tab) {
                     0 -> DreamCommandCenterScreen()
                     1 -> WorkingCoreChatScreen()
-                    2 -> MissionsScreen()
+                    2 -> MissionsScreen(highlightedMissionId)
                     3 -> DreamCouncilScreen()
                     4 -> BusinessCommandScreen()
                     else -> MoreExecutiveScreen()
@@ -191,12 +195,17 @@ private fun AgentsScreen() {
 }
 
 @Composable
-private fun MissionsScreen() {
+private fun MissionsScreen(highlightedMissionId: String? = null) {
     val state by EmpireMissionControl.state.collectAsState()
     val approvals by HumanApprovalGateway.requests.collectAsState()
+    val listState = rememberLazyListState()
     var title by remember { mutableStateOf("") }
     var owner by remember { mutableStateOf(ExecutiveAgent.SHOSHI) }
-    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+    LaunchedEffect(highlightedMissionId, state.missions.size) {
+        val index = state.missions.indexOfFirst { it.id == highlightedMissionId }
+        if (index >= 0) listState.animateScrollToItem(index + 2)
+    }
+    LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 24.dp)) {
         item { Header("Mission Control", "Evidence-first executive task orchestration") }
         item {
             ElevatedCard(Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
@@ -216,7 +225,12 @@ private fun MissionsScreen() {
         }
         items(state.missions, key = { it.id }) { mission ->
             val pendingApproval = approvals.values.firstOrNull { it.missionId == mission.id && it.userDecision == null }
-            ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
+            ElevatedCard(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).then(
+                    if (mission.id == highlightedMissionId) Modifier.border(2.dp, Gold, RoundedCornerShape(12.dp)) else Modifier
+                ),
+                colors = CardDefaults.elevatedCardColors(containerColor = Panel)
+            ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(mission.title, color = Gold, fontWeight = FontWeight.Bold)
                     Text("${mission.ownerId} • ${mission.status} • Evidence required")
