@@ -76,7 +76,7 @@ object AgencyBrainCouncil {
 
     private val AiProviderId.fabricId: String get() = when (this) {
         AiProviderId.OPENAI -> "openai"; AiProviderId.ANTHROPIC -> "anthropic"
-        AiProviderId.GOOGLE_GEMINI -> "google_gemini"; AiProviderId.OPENROUTER -> "openrouter"; AiProviderId.CUSTOM -> "custom"
+        AiProviderId.GOOGLE_GEMINI -> "google_gemini"; AiProviderId.OPENROUTER -> "openrouter"; AiProviderId.LOCAL_OPENAI -> "local"; AiProviderId.CUSTOM -> "custom"
     }
 }
 
