@@ -24,11 +24,12 @@ fun CommandCenterScreen() {
     val shoshi by MultiAgentCoordinator.shoshi.collectAsState()
     val luna by MultiAgentCoordinator.luna.collectAsState()
     val healths by SystemHealthManager.engineHealths.collectAsState()
+    val systemStatus by TitanEngine.systemStatus.collectAsState()
     
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("SHOSHILUNA COMMAND CENTER", color = Gold, fontWeight = FontWeight.Bold) },
+                title = { Text("מרכז השליטה של שושי ולונה", color = Gold, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Black)
             )
         },
@@ -42,16 +43,16 @@ fun CommandCenterScreen() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                ExecutiveStatusCard("SHOSHI", shoshi.role.name, "ACTIVE")
+                ExecutiveStatusCard("SHOSHI", shoshi.role.name, systemStatus)
             }
             item {
-                ExecutiveStatusCard("LUNA", luna.role.name, "ACTIVE")
+                ExecutiveStatusCard("LUNA", luna.role.name, systemStatus)
             }
             item {
                 SystemHealthSection(healths)
             }
             item {
-                Text("ACTIVE MISSIONS", color = Gold, style = MaterialTheme.typography.titleMedium)
+                Text("משימות פעילות", color = Gold, style = MaterialTheme.typography.titleMedium)
             }
             items(state.missions) { mission ->
                 MissionCard(mission.title, mission.status.name)
@@ -69,7 +70,7 @@ fun ExecutiveStatusCard(name: String, role: String, status: String) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(name, color = Gold, style = MaterialTheme.typography.headlineSmall)
             Text(role, color = Color.White.copy(alpha = 0.7f))
-            Text("STATUS: $status", color = Color.Green, fontWeight = FontWeight.Bold)
+            Text("מצב: $status", color = if (status == "HEALTHY") Color.Green else Color(0xFFFFC866), fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -77,7 +78,7 @@ fun ExecutiveStatusCard(name: String, role: String, status: String) {
 @Composable
 fun SystemHealthSection(healths: Map<String, com.shoshiluna.executive.core.health.EngineHealth>) {
     Column {
-        Text("SYSTEM HEALTH", color = Gold, style = MaterialTheme.typography.titleMedium)
+        Text("בריאות המערכת", color = Gold, style = MaterialTheme.typography.titleMedium)
         healths.forEach { (name, health) ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(name, color = Color.White)
