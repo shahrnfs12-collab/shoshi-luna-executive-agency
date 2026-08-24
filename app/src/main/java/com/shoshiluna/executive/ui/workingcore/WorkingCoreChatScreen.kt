@@ -69,6 +69,8 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
     var keyStatus by remember { mutableStateOf<String?>(null) }
     var customEndpoint by remember { mutableStateOf("") }
     var customModel by remember { mutableStateOf("") }
+    var localEndpoint by remember { mutableStateOf("http://10.0.2.2:11434/v1/chat/completions") }
+    var localModel by remember { mutableStateOf("llama3.2") }
     var providerHealth by remember { mutableStateOf<Map<AiProviderId, String>>(emptyMap()) }
     var testingAllProviders by remember { mutableStateOf(false) }
     var discoveringCatalog by remember { mutableStateOf(false) }
@@ -255,7 +257,17 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                         OutlinedTextField(customEndpoint, { customEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת HTTPS של OpenAI-compatible API") }, singleLine = true)
                         OutlinedTextField(customModel, { customModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל") }, singleLine = true)
                     }
-                    OutlinedTextField(
+                    if (providerSelection == AiProviderId.LOCAL_OPENAI) {
+                        Text("מנוע מקומי ללא מפתח", color = ChatGold, fontWeight = FontWeight.Bold)
+                        Text("נתמך: Ollama, LM Studio ו־llama.cpp. HTTP מותר רק למכשיר עצמו/אמולטור; חיבור רשת דורש HTTPS.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AssistChip(onClick = { localEndpoint = "http://10.0.2.2:11434/v1/chat/completions" }, label = { Text("Ollama") })
+                            AssistChip(onClick = { localEndpoint = "http://10.0.2.2:1234/v1/chat/completions" }, label = { Text("LM Studio") })
+                            AssistChip(onClick = { localEndpoint = "http://10.0.2.2:8080/v1/chat/completions" }, label = { Text("llama.cpp") })
+                        }
+                        OutlinedTextField(localEndpoint, { localEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת שרת מקומי") }, singleLine = true)
+                        OutlinedTextField(localModel, { localModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל מקומי") }, singleLine = true)
+                    } else OutlinedTextField(
                         value = apiKeyInput,
                         onValueChange = { value ->
                             apiKeyInput = value
@@ -273,33 +285,36 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                     keyStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            enabled = apiKeyInput.isNotBlank() && (providerSelection != AiProviderId.CUSTOM || (customEndpoint.isNotBlank() && customModel.isNotBlank())),
+                            enabled = if (providerSelection == AiProviderId.LOCAL_OPENAI) localEndpoint.isNotBlank() && localModel.isNotBlank()
+                                else apiKeyInput.isNotBlank() && (providerSelection != AiProviderId.CUSTOM || (customEndpoint.isNotBlank() && customModel.isNotBlank())),
                             onClick = {
-                                if (providerSelection == AiProviderId.CUSTOM) {
+                                if (providerSelection == AiProviderId.LOCAL_OPENAI) {
+                                    ApiKeyManager.saveLocalProvider(context, localEndpoint, localModel)
+                                } else if (providerSelection == AiProviderId.CUSTOM) {
                                     ApiKeyManager.saveCustomProvider(context, apiKeyInput, customEndpoint, customModel)
                                 } else ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
                                 apiKeyInput = ""
                                 val savedProvider = providerSelection
-                                keyStatus = "נשמר מוצפן. מבצעת בדיקת חיבור אמיתית…"
+                                keyStatus = if (savedProvider == AiProviderId.LOCAL_OPENAI) "החיבור המקומי נשמר. מבצעת בדיקה אמיתית…" else "נשמר מוצפן. מבצעת בדיקת חיבור אמיתית…"
                                 scope.launch {
                                     keyStatus = when (val result = OpenAiClient.getCompletionResult(
                                         messages = listOf(ChatMessage("user", "Reply with exactly: OK")),
                                         providerOverride = savedProvider
                                     )) {
-                                        is AiCallResult.Success -> "המפתח הוצפן והחיבור עבר בדיקה חיה"
-                                        is AiCallResult.Failure -> "המפתח הוצפן, אך החיבור נכשל: ${result.safeMessage}"
+                                        is AiCallResult.Success -> if (savedProvider == AiProviderId.LOCAL_OPENAI) "המנוע המקומי החזיר תשובה אמיתית" else "המפתח הוצפן והחיבור עבר בדיקה חיה"
+                                        is AiCallResult.Failure -> if (savedProvider == AiProviderId.LOCAL_OPENAI) "החיבור נשמר, אך המנוע לא ענה: ${result.safeMessage}" else "המפתח הוצפן, אך החיבור נכשל: ${result.safeMessage}"
                                     }
                                 }
                             }
-                        ) { Text("שמור מוצפן") }
+                        ) { Text(if (providerSelection == AiProviderId.LOCAL_OPENAI) "שמור חיבור מקומי" else "שמור מוצפן") }
                         OutlinedButton(onClick = {
                             ApiKeyManager.clearProviderKey(context, providerSelection)
                             apiKeyInput = ""
-                            keyStatus = "המפתח של ${providerSelection.name} נמחק"
+                            keyStatus = if (providerSelection == AiProviderId.LOCAL_OPENAI) "החיבור המקומי נמחק" else "המפתח של ${providerSelection.name} נמחק"
                         }) { Text("מחק ספק נבחר") }
                     }
                     OutlinedButton(
-                        enabled = ApiKeyManager.hasProviderKey(context, providerSelection),
+                        enabled = ApiKeyManager.hasProviderAccess(context, providerSelection),
                         onClick = {
                             ApiKeyManager.setActiveProvider(context, providerSelection)
                             keyStatus = "בודקת חיבור אמיתי ל-${providerSelection.name}…"
