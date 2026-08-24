@@ -30,6 +30,7 @@ import com.shoshiluna.executive.core.presentation.SpatialRenderer
 import com.shoshiluna.executive.core.presentation.VoiceEngine
 import com.shoshiluna.executive.core.health.RuntimeReadiness
 import com.shoshiluna.executive.core.hardening.MissionTransitionPolicy
+import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import com.shoshiluna.executive.ui.screens.BusinessCommandScreen
 import com.shoshiluna.executive.ui.screens.PipelineScreen
 import com.shoshiluna.executive.ui.screens.DreamCommandCenterScreen
@@ -192,6 +193,7 @@ private fun AgentsScreen() {
 @Composable
 private fun MissionsScreen() {
     val state by EmpireMissionControl.state.collectAsState()
+    val approvals by HumanApprovalGateway.requests.collectAsState()
     var title by remember { mutableStateOf("") }
     var owner by remember { mutableStateOf(ExecutiveAgent.SHOSHI) }
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -216,6 +218,7 @@ private fun MissionsScreen() {
             }
         }
         items(state.missions, key = { it.id }) { mission ->
+            val pendingApproval = approvals.values.firstOrNull { it.missionId == mission.id && it.userDecision == null }
             ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.elevatedCardColors(containerColor = Panel)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(mission.title, color = Gold, fontWeight = FontWeight.Bold)
@@ -233,6 +236,13 @@ private fun MissionsScreen() {
                             enabled = !state.emergencyHalt && MissionTransitionPolicy.canTransition(mission.status, MissionStatus.COMPLETED),
                             onClick = { EmpireMissionControl.transitionStatus(mission.id, MissionStatus.COMPLETED, "Manual Complete") }
                         ) { Text("הושלם") }
+                    }
+                    if (pendingApproval != null) {
+                        Text("נדרש אישור שלך לפני סיום המשימה", color = Gold, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { HumanApprovalGateway.provideDecision(pendingApproval.id, true) }) { Text("אישור התוצר") }
+                            OutlinedButton(onClick = { HumanApprovalGateway.provideDecision(pendingApproval.id, false) }) { Text("דחייה") }
+                        }
                     }
                 }
             }
