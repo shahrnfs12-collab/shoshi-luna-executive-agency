@@ -423,7 +423,8 @@ private fun ExecutiveVisionCarousel(
                 Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f)
             )
             SafeRasterExecutive(
-                R.drawable.luna_cutout, "LUNA",
+                // Use the same LUNA asset already proven to decode in Chat and agent cards.
+                R.drawable.luna_executive, "LUNA",
                 Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 42.dp).width(148.dp).height(455.dp).zIndex(2f)
             )
             Button(
