@@ -34,7 +34,8 @@ sealed interface AiCallResult {
     data class Success(
         val text: String,
         val provider: AiProviderId? = null,
-        val taskProfile: AiTaskProfile? = null
+        val taskProfile: AiTaskProfile? = null,
+        val model: String? = null
     ) : AiCallResult
     data class Failure(val state: AiConnectionState, val safeMessage: String, val httpCode: Int? = null) : AiCallResult
 }
@@ -114,7 +115,11 @@ object OpenAiClient {
 
                 SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated provider response")
                 CapabilityRegistry.update("ai", CapabilityStatus.READY, "Real provider response validated at runtime")
-                AiCallResult.Success(text)
+                val root = runCatching { gson.fromJson(body, com.google.gson.JsonObject::class.java) }.getOrNull()
+                val reportedModel = listOf("model", "modelVersion").firstNotNullOfOrNull { field ->
+                    root?.get(field)?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotBlank() }
+                } ?: effectiveModel
+                AiCallResult.Success(text, provider = provider, model = reportedModel)
             }
         } catch (_: SocketTimeoutException) {
             fail(AiConnectionState.OFFLINE, "AI request timed out.")
