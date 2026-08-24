@@ -1,6 +1,7 @@
 package com.shoshiluna.executive.core.video
 
 import android.content.Context
+import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaMuxer
 import android.net.Uri
@@ -101,7 +102,7 @@ object VideoWorkspace {
             val endUs = if (endMs > 0) endMs * 1000L else Long.MAX_VALUE
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val buffer = java.nio.ByteBuffer.allocate(maxBufferSize)
-            val info = android.media.MediaCodec.BufferInfo()
+            val info = MediaCodec.BufferInfo()
             var firstWrittenUs = -1L
             var lastWrittenUs = -1L
 
@@ -119,7 +120,13 @@ object VideoWorkspace {
                     info.offset = 0
                     info.size = size
                     info.presentationTimeUs = sampleTime - firstWrittenUs
-                    info.flags = extractor.sampleFlags
+                    // MediaExtractor and MediaCodec define different flag domains.
+                    // Only the sync/key-frame semantic is valid and required for remuxing here.
+                    info.flags = if ((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                        MediaCodec.BUFFER_FLAG_KEY_FRAME
+                    } else {
+                        0
+                    }
                     muxer.writeSampleData(outTrack, buffer, info)
                     lastWrittenUs = sampleTime
                 }
