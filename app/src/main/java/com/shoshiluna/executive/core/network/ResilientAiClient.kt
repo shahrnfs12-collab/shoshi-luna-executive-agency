@@ -9,6 +9,7 @@ object ResilientAiClient {
         context: Context,
         messages: List<ChatMessage>,
         model: String,
+        images: List<AiImageInput> = emptyList(),
         taskProfile: AiTaskProfile = AiTaskRouter.classify(messages.lastOrNull { it.role == "user" }?.content.orEmpty())
     ): AiCallResult {
         val configured = ApiKeyManager.configuredProviders(context)
@@ -17,7 +18,7 @@ object ResilientAiClient {
         val ordered = AiTaskRouter.orderedProviders(configured, active, taskProfile)
         var last: AiCallResult.Failure? = null
         for (provider in ordered) {
-            when (val result = OpenAiClient.getCompletionResult(messages, model, provider)) {
+            when (val result = OpenAiClient.getCompletionResult(messages, model, provider, images)) {
                 is AiCallResult.Success -> {
                     ApiKeyManager.setActiveProvider(context, provider)
                     return result.copy(provider = provider, taskProfile = taskProfile)
