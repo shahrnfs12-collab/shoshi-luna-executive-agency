@@ -18,7 +18,11 @@ object TrustedExternalAgentRegistry {
             endpoint = "https://api.openai.com/v1/responses",
             protocol = ExternalProtocol.OPENAI_RESPONSES,
             trustStatus = ExternalTrustStatus.PENDING,
-            capabilities = setOf("research", "analysis", "planning", "coding", "executive-support")
+            capabilities = setOf(
+                "deep-research", "strategic-analysis", "coding", "debugging", "build-and-test",
+                "security-review", "evidence-verification", "tool-design", "cost-benefit-analysis",
+                "opportunity-discovery", "technical-writing", "hebrew-english", "agent-orchestration"
+            )
         )
         _agents.value = _agents.value + (candidate.id to candidate)
     }
