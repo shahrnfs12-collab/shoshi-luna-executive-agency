@@ -60,9 +60,10 @@ fun ShoshiLunaAppWithVideo() {
 
         ExtendedFloatingActionButton(
             onClick = { showApiKeys = true },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            text = { Text("API Keys") }
-        )
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+        ) {
+            Text("API Keys")
+        }
 
         asset?.let { current ->
             ElevatedCard(
