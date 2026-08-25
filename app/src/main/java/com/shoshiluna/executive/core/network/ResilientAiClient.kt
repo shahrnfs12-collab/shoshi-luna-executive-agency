@@ -19,6 +19,7 @@ object ResilientAiClient {
         AiProviderId.OPENAI,
         AiProviderId.CUSTOM
     )
+    private const val MAX_PROVIDER_ATTEMPTS = 4
 
     suspend fun getCompletionResult(
         context: Context,
@@ -35,9 +36,13 @@ object ResilientAiClient {
         }
 
         var last: AiCallResult.Failure? = null
+        val failures = mutableListOf<String>()
+        var attemptedProviders = 0
         for (provider in ordered) {
+            if (attemptedProviders >= MAX_PROVIDER_ATTEMPTS) break
             val keys = ApiKeyManager.getProviderKeys(context, provider)
             if (keys.isEmpty()) continue
+            attemptedProviders += 1
 
             var providerFailure: AiCallResult.Failure? = null
             for ((index, key) in keys.withIndex()) {
@@ -60,7 +65,19 @@ object ResilientAiClient {
             }
 
             val failure = providerFailure ?: continue
+            failures += "${provider.name}: ${failure.safeMessage}"
             if (!shouldFailOverProvider(failure)) return failure
+        }
+
+        if (failures.isNotEmpty()) {
+            val remaining = ordered.count { ApiKeyManager.getProviderKeys(context, it).isNotEmpty() } - attemptedProviders
+            val suffix = if (remaining > 0) " ${remaining} additional configured route(s) will be reconsidered on the next request." else ""
+            val state = last?.state ?: AiConnectionState.ERROR
+            return AiCallResult.Failure(
+                state,
+                "AI provider route failed. ${failures.joinToString(" | ")}$suffix",
+                last?.httpCode
+            )
         }
         return last ?: AiCallResult.Failure(AiConnectionState.ERROR, "No configured AI provider completed the request.")
     }
