@@ -8,6 +8,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 
@@ -23,16 +25,17 @@ class GitHubConnectorAdapter : ConnectorAdapter {
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
         .build()
 
     override suspend fun execute(input: Map<String, String>): String {
         val token = GitHubCredentialStore.token()
-            ?: return failure("GITHUB_NOT_CONFIGURED", "GitHub credential is not configured.")
+            ?: return failure("GITHUB_NOT_CONFIGURED", "GitHub token is not configured on this device.")
         val repo = GitHubCredentialStore.repository()
-            ?: return failure("GITHUB_NOT_CONFIGURED", "GitHub repository is not configured.")
+            ?: return failure("GITHUB_NOT_CONFIGURED", "GitHub repository is not configured on this device.")
 
         return when (input["operation"]?.trim()?.lowercase()) {
             "repo" -> call("GET", "/repos/$repo", token)
@@ -124,13 +127,20 @@ class GitHubConnectorAdapter : ConnectorAdapter {
             else -> error("Unsupported GitHub method: $method")
         }
 
-        client.newCall(builder.build()).execute().use { response ->
-            val responseBody = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                return failure("GITHUB_HTTP_${response.code}", safeGitHubError(response.code, responseBody))
+        try {
+            client.newCall(builder.build()).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val safe = safeGitHubError(response.code, responseBody)
+                    throw IllegalStateException(safe)
+                }
+                if (response.code == 204) return success("GitHub operation completed.")
+                return responseBody.ifBlank { success("GitHub operation completed.") }
             }
-            if (response.code == 204) return success("GitHub operation completed.")
-            return responseBody.ifBlank { success("GitHub operation completed.") }
+        } catch (error: SocketTimeoutException) {
+            throw IllegalStateException("GitHub connection timed out. Check internet access and try again.", error)
+        } catch (error: IOException) {
+            throw IllegalStateException("GitHub network connection failed. Check internet, DNS or VPN and try again.", error)
         }
     }
 
@@ -138,7 +148,14 @@ class GitHubConnectorAdapter : ConnectorAdapter {
         val message = runCatching {
             gson.fromJson(rawBody, JsonObject::class.java).get("message")?.asString
         }.getOrNull()?.takeIf { it.isNotBlank() }
-        return "GitHub request failed (HTTP $code)${message?.let { ": $it" }.orEmpty()}"
+        return when (code) {
+            401 -> "GitHub rejected the token (HTTP 401). The token may be expired or invalid."
+            403 -> "GitHub denied access (HTTP 403). Check the token repository permissions and Actions permissions."
+            404 -> "GitHub repository was not found or the token has no access to it (HTTP 404). Check owner/name and repository access."
+            429 -> "GitHub rate limit reached (HTTP 429). Try again later."
+            in 500..599 -> "GitHub service error (HTTP $code). Try again later."
+            else -> "GitHub request failed (HTTP $code)${message?.let { ": $it" }.orEmpty()}"
+        }
     }
 
     private fun success(message: String): String = gson.toJson(mapOf("ok" to true, "message" to message))
