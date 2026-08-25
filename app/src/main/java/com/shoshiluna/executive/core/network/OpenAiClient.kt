@@ -30,9 +30,10 @@ sealed interface AiCallResult {
 object OpenAiClient {
     private const val DEFAULT_MODEL = "gpt-5.6-luna"
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(16, TimeUnit.SECONDS)
+        .writeTimeout(16, TimeUnit.SECONDS)
+        .callTimeout(16, TimeUnit.SECONDS)
         .build()
     private val gson = Gson()
     private val mediaType = "application/json; charset=utf-8".toMediaType()
@@ -51,7 +52,7 @@ object OpenAiClient {
         val apiKey = apiKeyOverride?.takeIf { it.isNotBlank() } ?: ApiKeyManager.getProviderKey(context, provider)
         if (apiKey.isNullOrBlank()) return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
 
-        SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting")
+        SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting to ${provider.name}")
         val instructions = messages.filter { it.role == "system" }.joinToString("\n\n") { it.content }.ifBlank { null }
         val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message -> if (message.role == "user") message.content else "${message.role}: ${message.content}" }
         val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
@@ -76,19 +77,19 @@ object OpenAiClient {
                     return@withContext fail(state, safeHttpMessage(provider, response.code), response.code)
                 }
                 val body = response.body?.string().orEmpty()
-                if (body.isBlank()) return@withContext fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
+                if (body.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned an empty HTTP body.")
                 val text = AiProviderPayloadCodec.decodeText(provider, body)
-                if (text.isBlank()) return@withContext fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
-                SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated provider response")
+                if (text.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned no usable message content.")
+                SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated ${provider.name} response")
                 CapabilityRegistry.update("ai", CapabilityStatus.READY, "Real provider response validated at runtime")
                 AiCallResult.Success(text)
             }
         } catch (_: SocketTimeoutException) {
-            fail(AiConnectionState.OFFLINE, "AI request timed out.")
+            fail(AiConnectionState.OFFLINE, "${provider.name} request timed out after 16 seconds.")
         } catch (_: IOException) {
-            fail(AiConnectionState.OFFLINE, "AI network connection failed.")
+            fail(AiConnectionState.OFFLINE, "${provider.name} network connection failed.")
         } catch (_: Exception) {
-            fail(AiConnectionState.ERROR, "AI request failed.")
+            fail(AiConnectionState.ERROR, "${provider.name} request failed.")
         }
     }
 
