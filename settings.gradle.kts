@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ShoshiLuna"
 include(":app")
- 
+include(":desktop")
