@@ -13,8 +13,8 @@ android {
         applicationId = "com.shoshiluna.executive"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.3-dream-build"
+        versionCode = 249
+        versionName = "2.4.9-ai-fabric-expanded"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
