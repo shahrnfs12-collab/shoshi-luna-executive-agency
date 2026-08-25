@@ -50,4 +50,14 @@ class CommandExecutionBridgeTest {
         val result = bridge.tryExecute("תסבירי לי למה חברה יכולה לשרוף מזומן", ExecutiveAgent.SHOSHI)
         assertTrue(result is CommandBridgeResult.NotHandled)
     }
+
+    @Test fun vagueWorkCommandRequestsMeasurableRevenueGoalWithoutCreatingMission() {
+        val result = bridge.tryExecute("לכי לעבוד", ExecutiveAgent.SHOSHI)
+        assertTrue(result is CommandBridgeResult.ClarificationRequired)
+        result as CommandBridgeResult.ClarificationRequired
+        assertEquals("CLARIFY_REVENUE_GOAL", result.command)
+        assertTrue(result.message.contains("כמה כסף"))
+        assertTrue(result.message.contains("באיזה טווח זמן"))
+        assertTrue(EmpireMissionControl.state.value.missions.isEmpty())
+    }
 }
