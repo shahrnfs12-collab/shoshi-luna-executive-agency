@@ -73,7 +73,19 @@ fun ExternalNetworkScreen() {
                     Text("${agent.protocol} • ${agent.trustStatus}", color = NetworkGold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (agent.trustStatus == ExternalTrustStatus.PENDING) {
-                            OutlinedButton(onClick = { TrustedExternalAgentRegistry.markTrusted(agent.id, null) }) { Text("Trust") }
+                            OutlinedButton(onClick = {
+                                scope.launch {
+                                    status = "Verifying ${agent.displayName}…"
+                                    val result = ExternalAgentGateway.handshake(agent.id)
+                                    status = result.fold(
+                                        {
+                                            TrustedExternalAgentRegistry.markTrusted(agent.id, it.proof)
+                                            "Verified and recruited: ${it.remoteIdentity}"
+                                        },
+                                        { "Recruitment blocked: ${it.message}" }
+                                    )
+                                }
+                            }) { Text("Verify & recruit") }
                         }
                         if (agent.trustStatus == ExternalTrustStatus.TRUSTED) {
                             OutlinedButton(onClick = {
