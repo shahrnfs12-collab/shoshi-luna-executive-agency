@@ -20,62 +20,41 @@ import java.util.concurrent.TimeUnit
 data class ChatMessage(val role: String, val content: String)
 data class ResponsesRequest(val model: String, val instructions: String?, val input: String)
 
-enum class AiConnectionState {
-    IDLE,
-    CONNECTING,
-    CONNECTED,
-    API_KEY_MISSING,
-    OFFLINE,
-    RATE_LIMITED,
-    ERROR
-}
+enum class AiConnectionState { IDLE, CONNECTING, CONNECTED, API_KEY_MISSING, OFFLINE, RATE_LIMITED, ERROR }
 
 sealed interface AiCallResult {
     data class Success(val text: String) : AiCallResult
     data class Failure(val state: AiConnectionState, val safeMessage: String, val httpCode: Int? = null) : AiCallResult
 }
 
-/**
- * Network-only OpenAI client. It never fabricates a model response.
- * Failure paths are represented explicitly so the UI cannot confuse an error with AI output.
- */
 object OpenAiClient {
     private const val DEFAULT_MODEL = "gpt-5.6-luna"
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(16, TimeUnit.SECONDS)
+        .writeTimeout(16, TimeUnit.SECONDS)
+        .callTimeout(16, TimeUnit.SECONDS)
         .build()
     private val gson = Gson()
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
     @Volatile private var appContext: Context? = null
-
-    fun initialize(context: Context) {
-        appContext = context.applicationContext
-    }
+    fun initialize(context: Context) { appContext = context.applicationContext }
 
     suspend fun getCompletionResult(
         messages: List<ChatMessage>,
         model: String = DEFAULT_MODEL,
-        providerOverride: AiProviderId? = null
+        providerOverride: AiProviderId? = null,
+        apiKeyOverride: String? = null
     ): AiCallResult = withContext(Dispatchers.IO) {
-        val context = appContext ?: return@withContext fail(
-            AiConnectionState.OFFLINE,
-            "AI runtime is not initialized."
-        )
-
+        val context = appContext ?: return@withContext fail(AiConnectionState.OFFLINE, "AI runtime is not initialized.")
         val provider = providerOverride ?: ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI
-        val apiKey = ApiKeyManager.getProviderKey(context, provider)
-        if (apiKey.isNullOrBlank()) {
-            return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
-        }
+        val apiKey = apiKeyOverride?.takeIf { it.isNotBlank() } ?: ApiKeyManager.getProviderKey(context, provider)
+        if (apiKey.isNullOrBlank()) return@withContext fail(AiConnectionState.API_KEY_MISSING, "${provider.name} API key is not configured.")
 
-        SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting")
+        SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.INITIALIZING, "Connecting to ${provider.name}")
         val instructions = messages.filter { it.role == "system" }.joinToString("\n\n") { it.content }.ifBlank { null }
-        val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message ->
-            if (message.role == "user") message.content else "${message.role}: ${message.content}"
-        }
+        val input = messages.filter { it.role != "system" }.joinToString("\n\n") { message -> if (message.role == "user") message.content else "${message.role}: ${message.content}" }
         val protocol = if (provider == AiProviderId.CUSTOM) ApiKeyManager.customProtocol(context) else AiProviderProtocols.forProvider(provider)
         val effectiveModel = if (provider == AiProviderId.OPENAI) model else protocol.defaultModel
         val requestBody = AiProviderPayloadCodec.encode(provider, effectiveModel, instructions, input).toRequestBody(mediaType)
@@ -97,27 +76,20 @@ object OpenAiClient {
                     }
                     return@withContext fail(state, safeHttpMessage(provider, response.code), response.code)
                 }
-
                 val body = response.body?.string().orEmpty()
-                if (body.isBlank()) {
-                    return@withContext fail(AiConnectionState.ERROR, "AI provider returned an empty HTTP body.")
-                }
-
+                if (body.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned an empty HTTP body.")
                 val text = AiProviderPayloadCodec.decodeText(provider, body)
-                if (text.isBlank()) {
-                    return@withContext fail(AiConnectionState.ERROR, "AI provider returned no usable message content.")
-                }
-
-                SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated provider response")
+                if (text.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned no usable message content.")
+                SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated ${provider.name} response")
                 CapabilityRegistry.update("ai", CapabilityStatus.READY, "Real provider response validated at runtime")
                 AiCallResult.Success(text)
             }
         } catch (_: SocketTimeoutException) {
-            fail(AiConnectionState.OFFLINE, "AI request timed out.")
+            fail(AiConnectionState.OFFLINE, "${provider.name} request timed out after 16 seconds.")
         } catch (_: IOException) {
-            fail(AiConnectionState.OFFLINE, "AI network connection failed.")
+            fail(AiConnectionState.OFFLINE, "${provider.name} network connection failed.")
         } catch (_: Exception) {
-            fail(AiConnectionState.ERROR, "AI request failed.")
+            fail(AiConnectionState.ERROR, "${provider.name} request failed.")
         }
     }
 
@@ -132,9 +104,7 @@ object OpenAiClient {
             content.forEach { contentEl ->
                 val contentObj = contentEl.takeIf { it.isJsonObject }?.asJsonObject ?: return@forEach
                 val type = contentObj.get("type")?.asString
-                if (type == "output_text" || type == "text") {
-                    contentObj.get("text")?.asString?.trim()?.takeIf { it.isNotBlank() }?.let(pieces::add)
-                }
+                if (type == "output_text" || type == "text") contentObj.get("text")?.asString?.trim()?.takeIf { it.isNotBlank() }?.let(pieces::add)
             }
         }
         return pieces.joinToString("\n").trim()
