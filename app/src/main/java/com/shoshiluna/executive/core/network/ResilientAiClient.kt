@@ -6,8 +6,8 @@ import com.shoshiluna.executive.core.security.ApiKeyManager
 /**
  * Bounded failover across owner-configured provider/key pools.
  * Key rotation is used only for key-specific auth/billing/permission failures.
- * Rate-limit, timeout and provider 5xx failures fail over to another provider instead of
- * cycling keys to bypass a service quota or rate-limit policy.
+ * Route/model failures (404/422), rate-limit, timeout and provider 5xx failures
+ * fail over to another configured provider instead of surfacing a dead route to the user.
  */
 object ResilientAiClient {
     private val freeFirstPriority = listOf(
@@ -19,7 +19,7 @@ object ResilientAiClient {
         AiProviderId.OPENAI,
         AiProviderId.CUSTOM
     )
-    private const val MAX_PROVIDER_ATTEMPTS = 4
+    private const val MAX_PROVIDER_ATTEMPTS = 7
 
     suspend fun getCompletionResult(
         context: Context,
@@ -31,7 +31,7 @@ object ResilientAiClient {
 
         val active = ApiKeyManager.activeProvider(context)
         val ordered = buildList {
-            if (active != null && active in setOf(AiProviderId.CUSTOM, AiProviderId.OPENROUTER_UNCENSORED) && active in configured) add(active)
+            if (active != null && active in configured) add(active)
             addAll(freeFirstPriority.filter { it in configured && it !in this })
         }
 
@@ -70,12 +70,10 @@ object ResilientAiClient {
         }
 
         if (failures.isNotEmpty()) {
-            val remaining = ordered.count { ApiKeyManager.getProviderKeys(context, it).isNotEmpty() } - attemptedProviders
-            val suffix = if (remaining > 0) " ${remaining} additional configured route(s) will be reconsidered on the next request." else ""
             val state = last?.state ?: AiConnectionState.ERROR
             return AiCallResult.Failure(
                 state,
-                "AI provider route failed. ${failures.joinToString(" | ")}$suffix",
+                "All configured AI routes were tried without a successful response. ${failures.joinToString(" | ")}",
                 last?.httpCode
             )
         }
@@ -88,9 +86,8 @@ object ResilientAiClient {
     internal fun shouldFailOverProvider(failure: AiCallResult.Failure): Boolean =
         failure.state == AiConnectionState.OFFLINE ||
             failure.state == AiConnectionState.RATE_LIMITED ||
-            failure.httpCode in setOf(401, 402, 403) ||
+            failure.httpCode in setOf(401, 402, 403, 404, 408, 409, 422) ||
             (failure.httpCode?.let { it in 500..599 } == true)
 
-    // Backward-compatible name used by existing tests.
     internal fun shouldFailOver(failure: AiCallResult.Failure): Boolean = shouldFailOverProvider(failure)
 }
