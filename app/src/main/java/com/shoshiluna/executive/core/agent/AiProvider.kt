@@ -84,7 +84,7 @@ object AgentSystemPrompts {
 }
 
 object AgentModelPolicy {
-    const val DREAM_DEFAULT_MODEL = "gpt-5.6-sol"
+    const val DREAM_DEFAULT_MODEL = "gpt-5.6-luna"
     fun modelFor(agent: ExecutiveAgent): String = DREAM_DEFAULT_MODEL
 }
 
