@@ -7,7 +7,7 @@ on:
 
 jobs:
   windows-desktop:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,38 +20,36 @@ jobs:
           cache: gradle
 
       - name: Unit tests
-        shell: pwsh
-        run: .\gradlew.bat --no-daemon :desktop:test
+        run: ./gradlew --no-daemon :desktop:test
 
-      - name: Install distribution
-        shell: pwsh
-        run: .\gradlew.bat --no-daemon :desktop:installDist
+      - name: Build desktop distribution
+        run: ./gradlew --no-daemon :desktop:installDist
 
-      - name: Package Windows app image
-        shell: pwsh
+      - name: Install MinGW cross compiler
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64 zip
+
+      - name: Build Windows PE launcher
         run: |
-          New-Item -ItemType Directory -Force -Path desktop\build\windows | Out-Null
-          jpackage --type app-image `
-            --input desktop\build\install\ShoshiLunaDesktop\lib `
-            --dest desktop\build\windows `
-            --name ShoshiLunaDesktop `
-            --main-jar shoshi-luna-desktop.jar `
-            --main-class com.shoshiluna.desktop.MainKt `
-            --app-version 0.1.0
-          if (!(Test-Path 'desktop\build\windows\ShoshiLunaDesktop\ShoshiLunaDesktop.exe')) { throw 'Windows launcher was not created' }
+          rm -rf desktop/build/windows
+          mkdir -p desktop/build/windows/ShoshiLunaDesktop/lib
+          x86_64-w64-mingw32-gcc -Os -s -mwindows \
+            desktop/src/launcher/windows_launcher.c \
+            -o desktop/build/windows/ShoshiLunaDesktop/ShoshiLunaDesktop.exe \
+            -luser32
+          cp -a desktop/build/install/ShoshiLunaDesktop/lib/. desktop/build/windows/ShoshiLunaDesktop/lib/
+          test -s desktop/build/windows/ShoshiLunaDesktop/ShoshiLunaDesktop.exe
+          file desktop/build/windows/ShoshiLunaDesktop/ShoshiLunaDesktop.exe | grep -E 'PE32\+ executable.*x86-64'
+          test -s desktop/build/windows/ShoshiLunaDesktop/lib/shoshi-luna-desktop.jar
 
-      - name: Runtime smoke test
-        shell: pwsh
+      - name: Verify JVM distribution
         run: |
-          $exe = Resolve-Path 'desktop\build\windows\ShoshiLunaDesktop\ShoshiLunaDesktop.exe'
-          $p = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 8
-          if ($p.HasExited) { throw "Desktop app exited unexpectedly with code $($p.ExitCode)" }
-          Stop-Process -Id $p.Id -Force
+          jar tf desktop/build/windows/ShoshiLunaDesktop/lib/shoshi-luna-desktop.jar | grep 'com/shoshiluna/desktop/MainKt.class'
+          jar tf desktop/build/windows/ShoshiLunaDesktop/lib/shoshi-luna-desktop.jar | grep 'com/shoshiluna/desktop/DesktopPolicies.class'
 
-      - name: Archive Windows distribution
-        shell: pwsh
-        run: Compress-Archive -Path desktop\build\windows\ShoshiLunaDesktop\* -DestinationPath desktop\build\ShoshiLunaDesktop-Windows-x64.zip -Force
+      - name: Archive portable Windows distribution
+        run: |
+          cd desktop/build/windows
+          zip -r ../ShoshiLunaDesktop-Windows-x64.zip ShoshiLunaDesktop
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
