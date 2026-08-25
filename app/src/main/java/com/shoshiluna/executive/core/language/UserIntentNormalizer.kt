@@ -27,8 +27,6 @@ object UserIntentNormalizer {
         "ליבנות" to "לבנות",
         "תיבני" to "תבני",
         "תיבנה" to "תבנה",
-        "ליצור" to "ליצור",
-        "צור לי" to "צור לי",
         "תיצרי" to "תייצרי",
         "תיצור" to "תייצר",
         "git hub" to "github",
@@ -39,6 +37,12 @@ object UserIntentNormalizer {
         "workfow" to "workflow",
         "comit" to "commit",
         "brach" to "branch"
+    )
+
+    /** Only routing keywords are fuzzy-corrected. Arbitrary prose is never fuzzy-rewritten. */
+    private val fuzzyRoutingKeywords = setOf(
+        "github", "repository", "repo", "workflow", "commit", "branch",
+        "סרטון", "סרטונים", "וידאו", "לבנות", "תבני", "ליצור", "תייצרי", "תייצר"
     )
 
     fun process(text: String): Result {
@@ -52,6 +56,7 @@ object UserIntentNormalizer {
         conservativeReplacements.forEach { (from, to) ->
             normalized = normalized.replace(from, to, ignoreCase = true)
         }
+        normalized = fuzzyNormalizeRoutingTokens(normalized)
 
         val modelPrompt = """
             LANGUAGE INTERPRETATION RULE
@@ -65,5 +70,54 @@ object UserIntentNormalizer {
         """.trimIndent()
 
         return Result(original, normalized, modelPrompt)
+    }
+
+    private fun fuzzyNormalizeRoutingTokens(text: String): String {
+        return text.split(' ').joinToString(" ") { token ->
+            if (!isSafeFuzzyCandidate(token)) return@joinToString token
+            val candidate = fuzzyRoutingKeywords
+                .map { keyword -> keyword to levenshtein(token, keyword) }
+                .filter { (keyword, distance) -> distance <= allowedDistance(token, keyword) }
+                .minByOrNull { it.second }
+            candidate?.first ?: token
+        }
+    }
+
+    private fun isSafeFuzzyCandidate(token: String): Boolean {
+        if (token.length < 4) return false
+        if (token.any { it.isDigit() }) return false
+        if (token.contains('/') || token.contains('.') || token.contains('@') || token.contains(':')) return false
+        if (!token.all { it.isLetter() || it == '-' || it == '_' }) return false
+        return true
+    }
+
+    private fun allowedDistance(token: String, keyword: String): Int {
+        val maxLen = maxOf(token.length, keyword.length)
+        return when {
+            maxLen <= 5 -> 1
+            maxLen <= 9 -> 2
+            else -> 3
+        }
+    }
+
+    private fun levenshtein(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
+        var previous = IntArray(b.length + 1) { it }
+        var current = IntArray(b.length + 1)
+        for (i in a.indices) {
+            current[0] = i + 1
+            for (j in b.indices) {
+                val insert = current[j] + 1
+                val delete = previous[j + 1] + 1
+                val replace = previous[j] + if (a[i] == b[j]) 0 else 1
+                current[j + 1] = minOf(insert, delete, replace)
+            }
+            val swap = previous
+            previous = current
+            current = swap
+        }
+        return previous[b.length]
     }
 }
