@@ -17,10 +17,11 @@ data class AutonomousMissionReceipt(
 )
 
 /**
- * Converts a broad user goal into a bounded two-executive workflow.
- * The engine is intentionally goal-first: it expects SHOSHI/LUNA to discover a workable path,
- * resolve missing detail from context/tools where possible, and only ask the user when a real
- * blocker or approval gate remains. External writes still remain behind ToolGateway/HumanApproval.
+ * Goal-first adaptive workflow. SHOSHI/LUNA discover a path, research options,
+ * select tools/providers, produce a deliverable, critique it, recover from
+ * reversible failures, verify evidence, and iterate until the mission can be
+ * honestly declared complete. External/financial/destructive actions remain
+ * behind ToolGateway and HumanApproval.
  */
 object AutonomousMissionEngine {
     fun submitGoal(goal: String, requestedOwner: ExecutiveAgent): AutonomousMissionReceipt {
@@ -31,25 +32,30 @@ object AutonomousMissionEngine {
         val mission = EmpireMissionControl.createMission(cleanGoal, requestedOwner.id)
         val counterpart = if (requestedOwner == ExecutiveAgent.SHOSHI) ExecutiveAgent.LUNA else ExecutiveAgent.SHOSHI
         val plan = listOf(
-            MissionWorkItem(1, requestedOwner, "לנסח את התוצאה הרצויה ומדד הצלחה סביר מתוך המטרה וההקשר הקיים; לא לבקש פרטים שניתן להסיק בבטחה"),
-            MissionWorkItem(2, counterpart, "לחקור עצמאית דרכי ביצוע אפשריות באמצעות ידע, זיכרון וכלים זמינים; לזהות חלופות, תלויות וחסמים אמיתיים"),
-            MissionWorkItem(3, requestedOwner, "לבחור את המסלול החזק והמעשי ביותר, לציין הנחות עבודה ולבנות תוכנית Goal-to-Plan אופרטיבית"),
-            MissionWorkItem(4, requestedOwner, "להתקדם אוטומטית בכל צעד אנליטי/תכנוני/הפיך שאינו דורש אישור, ולייצר תוצר ראשון שימושי במקום להמתין למפרט מושלם"),
-            MissionWorkItem(5, counterpart, "לבצע ביקורת נגדית: לחפש דרך טובה יותר, קיצור דרך חוקי, סיכון שלא נלקח בחשבון או הזדמנות לשיפור"),
-            MissionWorkItem(6, requestedOwner, "לעצור רק בחסם אמיתי: מידע שאי אפשר להסיק או לאמת, או פעולה חיצונית/כספית/בלתי-הפיכה שמחייבת Approval", requiresApproval = true),
-            MissionWorkItem(7, counterpart, "לאמת תוצאה וראיות, להציע iteration הבא ולהמשיך קדימה אם אין חסם מהותי")
+            MissionWorkItem(1, requestedOwner, "GOAL: infer desired outcome, constraints and measurable success from context; ask only for irreducible missing input"),
+            MissionWorkItem(2, counterpart, "RESEARCH LOOP: use permitted memory, browser/research, GitHub, agents and available tools to discover facts, options and dependencies before saying the task cannot be done"),
+            MissionWorkItem(3, requestedOwner, "DYNAMIC PLAN: generate task-specific steps and alternatives rather than relying on a fixed recipe; rank paths by expected quality, risk, time and cost"),
+            MissionWorkItem(4, counterpart, "TOOL DISCOVERY/ROUTING: identify the best available model, tool, API, library or provider for each subtask; propose a connection when a required capability is genuinely absent"),
+            MissionWorkItem(5, requestedOwner, "DELIVERABLE MODE: produce the actual useful artifact/result whenever technically available, not merely instructions describing how it could be produced"),
+            MissionWorkItem(6, counterpart, "CRITIC: attack the draft for factual gaps, weak assumptions, missed opportunities, security issues and better approaches; demand revision when material defects remain"),
+            MissionWorkItem(7, requestedOwner, "RECOVERY: on reversible failure retry intelligently, then switch tool/provider or re-plan before escalating to the user"),
+            MissionWorkItem(8, requestedOwner, "PERSISTENT GOAL: preserve current objective, attempted approaches, failures, evidence, open blockers and next action in mission state/memory"),
+            MissionWorkItem(9, counterpart, "SELF-EVALUATION: score goal progress, deliverable quality, evidence, autonomy and verification; never declare done merely because steps ran"),
+            MissionWorkItem(10, requestedOwner, "LEARNING: record outcome-based reusable lessons about successful/failed strategies without self-modifying security, approval or financial policy"),
+            MissionWorkItem(11, counterpart, "APPROVAL GATE: stop only for irreducible user input or external, financial, credential-sensitive, destructive or irreversible action requiring approval", requiresApproval = true),
+            MissionWorkItem(12, requestedOwner, "ITERATE: if Mission Completion Score is below verified-complete threshold, choose the highest-value correction and continue")
         )
         EmpireMissionControl.attachPlan(mission.id, plan.map { "${it.order}|${it.owner.id}|${it.requiresApproval}|${it.description}" })
-        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.PLANNED, "Goal-to-plan autonomous workflow created")
-        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.ASSIGNED, "Goal decomposition assigned to SHOSHI and LUNA")
-        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Autonomous path discovery started")
+        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.PLANNED, "Adaptive goal-to-deliverable workflow created")
+        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.ASSIGNED, "Research, builder and critic roles assigned")
+        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Autonomous mission intelligence loop started")
         EmpireMissionControl.updatePlanStep(mission.id, 1, "COMPLETED", "Goal interpreted from available context")
-        EmpireMissionControl.updatePlanStep(mission.id, 2, "RUNNING", "Independent path discovery and option search started")
+        EmpireMissionControl.updatePlanStep(mission.id, 2, "RUNNING", "Research and path discovery started")
         CollaborationEngine.startConsultation(
             missionId = mission.id,
             initiatorId = requestedOwner.id,
             targetId = counterpart.id,
-            topic = "Find the strongest safe path to achieve this broad goal without waiting for unnecessary user detail: $cleanGoal"
+            topic = "Discover, build, critique and verify the strongest safe path to this goal. Do not wait for unnecessary user detail: $cleanGoal"
         )
         return AutonomousMissionReceipt(
             mission = EmpireMissionControl.state.value.missions.first { it.id == mission.id },
