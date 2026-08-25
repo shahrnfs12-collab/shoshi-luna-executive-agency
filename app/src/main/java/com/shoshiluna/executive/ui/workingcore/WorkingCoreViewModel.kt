@@ -112,6 +112,18 @@ class WorkingCoreViewModel(
                 ExecutivePresenceEngine.idle(agent)
                 return
             }
+            is CommandBridgeResult.ClarificationRequired -> {
+                val resultMessage = WorkingCoreMessage(agent = agent, fromUser = false, text = command.message, source = WorkingCoreMessageSource.COMMAND)
+                _uiState.value = _uiState.value.copy(
+                    isSending = false,
+                    messages = _uiState.value.messages + userMessage + resultMessage,
+                    error = null,
+                    speakMessageId = if (speakResponse) resultMessage.id else null,
+                    sharedRoomActive = false
+                )
+                ExecutivePresenceEngine.idle(agent, "Waiting for measurable revenue goal")
+                return
+            }
             CommandBridgeResult.NotHandled -> Unit
         }
 
