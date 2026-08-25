@@ -1,5 +1,10 @@
 package com.shoshiluna.executive.ui.workingcore
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -96,7 +102,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
         vm.markSpoken(id)
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF060606))) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF060606)).imePadding()) {
         Text(
             "SHOSHI • LUNA — AI Chat",
             color = ChatGold,
@@ -106,6 +112,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
         )
 
         ConnectionBanner(ui.connection, ui.error)
+        if (ui.isSending) ExecutiveWorkingDance()
 
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -335,9 +342,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
             }
             items(ui.messages, key = { it.id }) { msg -> WorkingCoreBubble(msg) }
             ui.error?.let { error ->
-                item {
-                    Text("שגיאה: $error", color = MaterialTheme.colorScheme.error)
-                }
+                item { Text("שגיאה: $error", color = MaterialTheme.colorScheme.error) }
             }
         }
 
@@ -381,6 +386,50 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                     input = ""
                 }
             ) { Icon(Icons.Default.Send, contentDescription = "Send") }
+        }
+    }
+}
+
+@Composable
+private fun ExecutiveWorkingDance() {
+    val transition = rememberInfiniteTransition(label = "executive-working")
+    val phase by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(520), repeatMode = RepeatMode.Reverse),
+        label = "dance-phase"
+    )
+    Surface(
+        color = ChatGold.copy(alpha = 0.08f),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(R.drawable.shoshi_executive),
+                contentDescription = "SHOSHI working",
+                modifier = Modifier.size(48.dp).graphicsLayer {
+                    translationY = phase * 8f
+                    rotationZ = phase * 5f
+                },
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("שושי ולונה עובדות…", color = ChatGold, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(8.dp))
+            Image(
+                painter = painterResource(R.drawable.luna_executive),
+                contentDescription = "LUNA working",
+                modifier = Modifier.size(48.dp).graphicsLayer {
+                    translationY = -phase * 8f
+                    rotationZ = -phase * 5f
+                },
+                contentScale = ContentScale.Crop
+            )
         }
     }
 }
