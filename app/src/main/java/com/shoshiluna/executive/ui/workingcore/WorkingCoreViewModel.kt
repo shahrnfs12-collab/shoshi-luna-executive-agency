@@ -13,6 +13,7 @@ import com.shoshiluna.executive.core.agent.MemoryPartition
 import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.business.EvidenceRegistry
 import com.shoshiluna.executive.core.github.GitHubCredentialStore
+import com.shoshiluna.executive.core.language.UserIntentNormalizer
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.AiConnectionState
 import com.shoshiluna.executive.core.network.ConnectorRegistry
@@ -58,7 +59,8 @@ class WorkingCoreViewModel(
     }
 
     fun send(prompt: String, speakResponse: Boolean = false) {
-        val clean = prompt.trim()
+        val processed = UserIntentNormalizer.process(prompt)
+        val clean = processed.original
         if (clean.isBlank() || _uiState.value.isSending) return
         val agent = _uiState.value.selectedAgent
         val userMessage = WorkingCoreMessage(agent = agent, fromUser = true, text = clean)
@@ -98,8 +100,8 @@ class WorkingCoreViewModel(
         )
         activeRequest?.cancel()
         activeRequest = viewModelScope.launch {
-            val routedPrompt = if (isGitHubIntent(clean)) {
-                when (val githubContext = buildVerifiedGitHubContext(clean)) {
+            val routedPrompt = if (isGitHubIntent(processed.normalizedForRouting)) {
+                when (val githubContext = buildVerifiedGitHubContext(processed.modelPrompt)) {
                     is GitHubContext.Ready -> githubContext.prompt
                     is GitHubContext.NotConfigured -> {
                         val message = WorkingCoreMessage(
@@ -127,7 +129,7 @@ class WorkingCoreViewModel(
                         return@launch
                     }
                 }
-            } else clean
+            } else processed.modelPrompt
 
             when (val result = gateway.send(agent, routedPrompt)) {
                 is AiCallResult.Success -> {
@@ -205,7 +207,7 @@ class WorkingCoreViewModel(
             LIVE REPOSITORY RESPONSE:
             $compactResponse
 
-            ORIGINAL USER REQUEST:
+            ORIGINAL USER REQUEST WITH TYPO-AWARE INTERPRETATION RULES:
             $userPrompt
             """.trimIndent()
         )
@@ -213,7 +215,7 @@ class WorkingCoreViewModel(
 
     private fun isGitHubIntent(text: String): Boolean {
         val normalized = text.lowercase()
-        return listOf("github", "git hub", "גיטהאב", "גיט האב", "ריפו", "repository", "repo", "ci/cd", "workflow", "pull request", "commit", "branch").any { it in normalized }
+        return listOf("github", "גיטהאב", "repo", "repository", "ci/cd", "workflow", "pull request", "commit", "branch").any { it in normalized }
     }
 
     fun markSpoken(messageId: String) {
