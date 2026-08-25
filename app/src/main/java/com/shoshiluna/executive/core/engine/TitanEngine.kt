@@ -14,6 +14,7 @@ import com.shoshiluna.executive.core.external.ExternalOperationJournal
 import com.shoshiluna.executive.core.external.GenericHttpsAgentAdapter
 import com.shoshiluna.executive.core.github.GitHubCredentialStore
 import com.shoshiluna.executive.core.github.GitHubConnectorAdapter
+import com.shoshiluna.executive.core.video.VideoGenerationCredentialStore
 import com.shoshiluna.executive.core.video.VideoWorkspace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,7 @@ object TitanEngine {
         EvolutionEngine.initialize(context)
         HumanApprovalGateway.initialize(context)
         VideoWorkspace.initialize(context)
+        VideoGenerationCredentialStore.initialize(context)
         BuiltInToolBootstrap.initialize()
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
