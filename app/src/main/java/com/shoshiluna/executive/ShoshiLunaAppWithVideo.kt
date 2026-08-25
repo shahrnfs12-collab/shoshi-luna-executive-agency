@@ -18,11 +18,12 @@ import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.business.EvidenceRegistry
 import com.shoshiluna.executive.core.video.VideoWorkspace
 import com.shoshiluna.executive.ui.settings.ApiKeyPoolDialog
+import com.shoshiluna.executive.ui.settings.CapabilityApprovalOverlay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Adds device-local video and secure AI-key management over the executive app. */
+/** Adds device-local video, secure AI-key management and capability approvals over the executive app. */
 @Composable
 fun ShoshiLunaAppWithVideo() {
     val context = LocalContext.current
@@ -113,4 +114,7 @@ fun ShoshiLunaAppWithVideo() {
     if (showApiKeys) {
         ApiKeyPoolDialog(onDismiss = { showApiKeys = false })
     }
+
+    // Global fail-closed overlay: any missing-capability build waits here for owner approval.
+    CapabilityApprovalOverlay()
 }
