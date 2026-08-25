@@ -1,0 +1,61 @@
+name: Windows Desktop CI
+
+on:
+  push:
+    branches: [ "shoshi-luna-windows-desktop" ]
+  workflow_dispatch:
+
+jobs:
+  windows-desktop:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Unit tests
+        shell: pwsh
+        run: .\gradlew.bat --no-daemon :desktop:test
+
+      - name: Install distribution
+        shell: pwsh
+        run: .\gradlew.bat --no-daemon :desktop:installDist
+
+      - name: Package Windows app image
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path desktop\build\windows | Out-Null
+          jpackage --type app-image `
+            --input desktop\build\install\ShoshiLunaDesktop\lib `
+            --dest desktop\build\windows `
+            --name ShoshiLunaDesktop `
+            --main-jar shoshi-luna-desktop.jar `
+            --main-class com.shoshiluna.desktop.MainKt `
+            --app-version 0.1.0
+          if (!(Test-Path 'desktop\build\windows\ShoshiLunaDesktop\ShoshiLunaDesktop.exe')) { throw 'Windows launcher was not created' }
+
+      - name: Runtime smoke test
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path 'desktop\build\windows\ShoshiLunaDesktop\ShoshiLunaDesktop.exe'
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 8
+          if ($p.HasExited) { throw "Desktop app exited unexpectedly with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+
+      - name: Archive Windows distribution
+        shell: pwsh
+        run: Compress-Archive -Path desktop\build\windows\ShoshiLunaDesktop\* -DestinationPath desktop\build\ShoshiLunaDesktop-Windows-x64.zip -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShoshiLunaDesktop-Windows-x64
+          path: desktop/build/ShoshiLunaDesktop-Windows-x64.zip
+          if-no-files-found: error
