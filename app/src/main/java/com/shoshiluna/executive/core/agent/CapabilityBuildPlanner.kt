@@ -21,10 +21,6 @@ data class CapabilityBuildProposal(
     val status: CapabilityBuildStatus = CapabilityBuildStatus.AWAITING_APPROVAL
 )
 
-/**
- * Plans missing capabilities but never self-modifies silently.
- * Any capability extension must be explained to the owner and explicitly approved first.
- */
 object CapabilityBuildPlanner {
     @Volatile private var proposals: Map<String, CapabilityBuildProposal> = emptyMap()
 
@@ -44,7 +40,6 @@ object CapabilityBuildPlanner {
         require(gap.isNotBlank()) { "Capability gap is required" }
         require(whyNeeded.isNotBlank()) { "Reason is required" }
         require(plannedChanges.isNotEmpty()) { "Planned changes are required" }
-
         val action = buildString {
             append("Build missing capability: ").append(capabilityName)
             if (missionId != null) append(" for mission ").append(missionId)
@@ -53,17 +48,10 @@ object CapabilityBuildPlanner {
             append("Capability gap: ").append(gap).append(". ")
             append("Why needed: ").append(whyNeeded).append(". ")
             append("Planned changes: ").append(plannedChanges.joinToString(" | "))
-            if (expectedToolsOrDependencies.isNotEmpty()) {
-                append(". Tools/dependencies: ").append(expectedToolsOrDependencies.joinToString(", "))
-            }
+            if (expectedToolsOrDependencies.isNotEmpty()) append(". Tools/dependencies: ").append(expectedToolsOrDependencies.joinToString(", "))
             append(". Verification: ").append(verificationPlan.joinToString(" -> "))
         }
-        val approvalId = HumanApprovalGateway.requestApproval(
-            action = action,
-            agentId = agent.id,
-            risk = riskLevel,
-            reason = reason
-        )
+        val approvalId = HumanApprovalGateway.requestApproval(action, agent.id, riskLevel, reason)
         val proposal = CapabilityBuildProposal(
             missionId = missionId,
             requestingAgent = agent,
@@ -80,16 +68,21 @@ object CapabilityBuildPlanner {
         return proposal
     }
 
-    @Synchronized
-    fun get(id: String): CapabilityBuildProposal? = proposals[id]
+    @Synchronized fun get(id: String): CapabilityBuildProposal? = proposals[id]
+    @Synchronized fun all(): List<CapabilityBuildProposal> = proposals.values.toList()
+    @Synchronized fun findByApprovalRequestId(requestId: String): CapabilityBuildProposal? = proposals.values.firstOrNull { it.approvalRequestId == requestId }
 
     @Synchronized
-    fun all(): List<CapabilityBuildProposal> = proposals.values.toList()
+    fun applyOwnerDecision(requestId: String, approved: Boolean) {
+        HumanApprovalGateway.provideDecision(requestId, approved)
+        val proposal = findByApprovalRequestId(requestId) ?: return
+        proposals = proposals + (proposal.id to proposal.copy(status = if (approved) CapabilityBuildStatus.APPROVED else CapabilityBuildStatus.REJECTED))
+    }
 
     @Synchronized
     fun canBuild(id: String): Boolean {
         val proposal = proposals[id] ?: return false
-        return HumanApprovalGateway.isApproved(proposal.approvalRequestId)
+        return proposal.status == CapabilityBuildStatus.APPROVED && HumanApprovalGateway.isApproved(proposal.approvalRequestId)
     }
 
     @Synchronized
