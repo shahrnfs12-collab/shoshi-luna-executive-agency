@@ -17,11 +17,12 @@ import com.shoshiluna.executive.core.agent.ExecutiveAgent
 import com.shoshiluna.executive.core.business.EvidenceCategory
 import com.shoshiluna.executive.core.business.EvidenceRegistry
 import com.shoshiluna.executive.core.video.VideoWorkspace
+import com.shoshiluna.executive.ui.settings.ApiKeyPoolDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Adds a device-local video workspace over the existing executive app. */
+/** Adds device-local video and secure AI-key management over the executive app. */
 @Composable
 fun ShoshiLunaAppWithVideo() {
     val context = LocalContext.current
@@ -30,6 +31,7 @@ fun ShoshiLunaAppWithVideo() {
     var asset by remember { mutableStateOf<VideoWorkspace.VideoAsset?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
     var building by remember { mutableStateOf(false) }
+    var showApiKeys by remember { mutableStateOf(false) }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -54,6 +56,12 @@ fun ShoshiLunaAppWithVideo() {
         ) {
             Icon(Icons.Default.AttachFile, contentDescription = "העלאת וידאו")
         }
+
+        ExtendedFloatingActionButton(
+            onClick = { showApiKeys = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            text = { Text("API Keys") }
+        )
 
         asset?.let { current ->
             ElevatedCard(
@@ -100,5 +108,9 @@ fun ShoshiLunaAppWithVideo() {
                 }
             }
         }
+    }
+
+    if (showApiKeys) {
+        ApiKeyPoolDialog(onDismiss = { showApiKeys = false })
     }
 }
