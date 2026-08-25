@@ -1,519 +1,166 @@
-package com.shoshiluna.executive.ui.workingcore
+package com.shoshiluna.executive.core.github
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.shoshiluna.executive.R
-import com.shoshiluna.executive.core.agent.ExecutiveAgent
-import com.shoshiluna.executive.core.github.GitHubCredentialStore
-import com.shoshiluna.executive.core.network.AiConnectionState
-import com.shoshiluna.executive.core.network.AiProviderId
-import com.shoshiluna.executive.core.network.AiProviderRegistry
-import com.shoshiluna.executive.core.network.AiCallResult
-import com.shoshiluna.executive.core.network.ChatMessage
-import com.shoshiluna.executive.core.network.ConnectorRegistry
-import com.shoshiluna.executive.core.network.OpenAiClient
-import com.shoshiluna.executive.core.presentation.VoiceEngine
-import com.shoshiluna.executive.core.security.ApiKeyManager
-import com.shoshiluna.executive.core.voice.AndroidSpeechToTextEngine
-import com.shoshiluna.executive.core.voice.AudioPermissionState
-import com.shoshiluna.executive.core.voice.SttState
-import com.shoshiluna.executive.core.voice.rememberAudioPermissionFlow
-import java.util.Locale
-import kotlinx.coroutines.launch
+import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.shoshiluna.executive.core.network.ConnectorAdapter
+import com.shoshiluna.executive.core.security.HumanApprovalGateway
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
+import java.net.SocketTimeoutException
+import java.util.Base64
+import java.util.concurrent.TimeUnit
 
-private val ChatGold = Color(0xFFD8B45A)
-private val ChatPanel = Color(0xFF111111)
+/**
+ * Narrow GitHub REST adapter for the owner's configured repository.
+ * Authentication is configured once and reused from encrypted device storage.
+ * The adapter never returns or logs the credential.
+ */
+class GitHubConnectorAdapter : ConnectorAdapter {
+    override val id: String = "github"
+    override val name: String = "GitHub Repository & CI"
 
-@Composable
-fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val ui by vm.uiState.collectAsState()
-    val stt = remember(context) { AndroidSpeechToTextEngine(context, Locale.forLanguageTag("he-IL")) }
-    val sttState by stt.state.collectAsState()
-    var input by remember { mutableStateOf("") }
-    var apiKeyInput by remember { mutableStateOf("") }
-    var providerSelection by remember { mutableStateOf(ApiKeyManager.activeProvider(context) ?: AiProviderId.OPENAI) }
-    var keyStatus by remember { mutableStateOf<String?>(null) }
-    var customEndpoint by remember { mutableStateOf("") }
-    var customModel by remember { mutableStateOf("") }
-    var showApiSettings by remember { mutableStateOf(ApiKeyManager.configuredProviders(context).isEmpty()) }
+    private val gson = Gson()
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
+        .build()
 
-    var showGitHubSettings by remember { mutableStateOf(false) }
-    var githubTokenInput by remember { mutableStateOf("") }
-    var githubRepoInput by remember {
-        mutableStateOf(GitHubCredentialStore.repository() ?: "shahrnfs12-collab/shoshi-luna-executive-agency")
-    }
-    var githubStatus by remember {
-        mutableStateOf(if (GitHubCredentialStore.isConfigured()) "GitHub: מוגדר ומוצפן" else "GitHub: לא מוגדר")
-    }
+    override suspend fun execute(input: Map<String, String>): String {
+        val token = GitHubCredentialStore.token()
+            ?: return failure("GITHUB_NOT_CONFIGURED", "GitHub token is not configured on this device.")
+        val repo = GitHubCredentialStore.repository()
+            ?: return failure("GITHUB_NOT_CONFIGURED", "GitHub repository is not configured on this device.")
 
-    fun beginListening() {
-        VoiceEngine.stopSpeech()
-        VoiceEngine.onUserSpeechDetected()
-        stt.startListening { transcript ->
-            input = transcript
-            vm.send(transcript, speakResponse = true)
-            input = ""
-        }
-    }
-
-    val (permissionState, requestPermission) = rememberAudioPermissionFlow(onGranted = { beginListening() })
-
-    DisposableEffect(stt) {
-        onDispose {
-            stt.release()
-            VoiceEngine.stopSpeech()
-        }
-    }
-
-    LaunchedEffect(ui.speakMessageId, ui.messages) {
-        val id = ui.speakMessageId ?: return@LaunchedEffect
-        val msg = ui.messages.firstOrNull { it.id == id && !it.fromUser } ?: return@LaunchedEffect
-        VoiceEngine.speak(msg.text, msg.agent.name)
-        vm.markSpoken(id)
-    }
-
-    Column(Modifier.fillMaxSize().background(Color(0xFF060606)).imePadding()) {
-        Text(
-            "SHOSHI • LUNA — AI Chat",
-            color = ChatGold,
-            fontWeight = FontWeight.Black,
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(16.dp)
-        )
-
-        ConnectionBanner(ui.connection, ui.error)
-        if (ui.isSending) ExecutiveWorkingDance()
-
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            AgentSelector(
-                agent = ExecutiveAgent.SHOSHI,
-                selected = ui.selectedAgent == ExecutiveAgent.SHOSHI,
-                image = R.drawable.shoshi_executive,
-                enabled = !ui.isSending,
-                modifier = Modifier.weight(1f),
-                onClick = { vm.selectAgent(ExecutiveAgent.SHOSHI) }
-            )
-            AgentSelector(
-                agent = ExecutiveAgent.LUNA,
-                selected = ui.selectedAgent == ExecutiveAgent.LUNA,
-                image = R.drawable.luna_executive,
-                enabled = !ui.isSending,
-                modifier = Modifier.weight(1f),
-                onClick = { vm.selectAgent(ExecutiveAgent.LUNA) }
-            )
-        }
-
-        if (showApiSettings) {
-            ElevatedCard(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = ChatPanel)
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 430.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 28.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("חיבור ספקי AI", color = ChatGold, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { showApiSettings = false }) { Text("סגירה") }
-                    }
-                    Text(
-                        ApiKeyManager.configuredProviders(context).takeIf { it.isNotEmpty() }
-                            ?.joinToString(prefix = "מפתחות שמורים ומוצפנים: ") { it.name }
-                            ?: "לא הוגדר מפתח. בקשות AI אינן יכולות לפעול.",
-                        color = Color.LightGray
-                    )
-                    Text(
-                        "Production security gate: provider API secrets must move to a server-side relay before public release.",
-                        color = Color.Gray,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text("בחרי ספק — הזיהוי האוטומטי יעדכן את הבחירה כשאפשר:", color = Color.LightGray)
-                    AiProviderId.entries.chunked(2).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { provider ->
-                                FilterChip(
-                                    selected = providerSelection == provider,
-                                    onClick = { providerSelection = provider; keyStatus = null },
-                                    label = { Text(provider.name) }
-                                )
-                            }
-                        }
-                    }
-                    if (providerSelection == AiProviderId.CUSTOM) {
-                        OutlinedTextField(customEndpoint, { customEndpoint = it }, Modifier.fillMaxWidth(), label = { Text("כתובת HTTPS של OpenAI-compatible API") }, singleLine = true)
-                        OutlinedTextField(customModel, { customModel = it }, Modifier.fillMaxWidth(), label = { Text("מזהה מודל") }, singleLine = true)
-                    }
-                    OutlinedTextField(
-                        value = apiKeyInput,
-                        onValueChange = { value ->
-                            apiKeyInput = value
-                            keyStatus = runCatching { AiProviderRegistry.detect(value) }.getOrNull()?.let { detected ->
-                                detected.provider?.also { providerSelection = it }
-                                if (detected.requiresUserSelection) "לא ניתן לזהות בוודאות — בחרי ספק" else "זוהה: ${detected.provider?.name}"
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("API key") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation()
-                    )
-                    keyStatus?.let { Text(it, color = ChatGold, style = MaterialTheme.typography.bodySmall) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            enabled = apiKeyInput.isNotBlank() && (providerSelection != AiProviderId.CUSTOM || (customEndpoint.isNotBlank() && customModel.isNotBlank())),
-                            onClick = {
-                                if (providerSelection == AiProviderId.CUSTOM) {
-                                    ApiKeyManager.saveCustomProvider(context, apiKeyInput, customEndpoint, customModel)
-                                } else ApiKeyManager.saveProviderKey(context, providerSelection, apiKeyInput)
-                                apiKeyInput = ""
-                                keyStatus = "נשמר מוצפן עבור ${providerSelection.name}; החיבור יאומת בבקשה הבאה"
-                            }
-                        ) { Text("שמור מוצפן") }
-                        OutlinedButton(onClick = {
-                            ApiKeyManager.clearProviderKey(context, providerSelection)
-                            apiKeyInput = ""
-                            keyStatus = "המפתח של ${providerSelection.name} נמחק"
-                        }) { Text("מחק ספק נבחר") }
-                    }
-                    OutlinedButton(
-                        enabled = ApiKeyManager.hasProviderKey(context, providerSelection),
-                        onClick = {
-                            ApiKeyManager.setActiveProvider(context, providerSelection)
-                            keyStatus = "בודקת חיבור אמיתי ל-${providerSelection.name}…"
-                            scope.launch {
-                                keyStatus = when (val result = OpenAiClient.getCompletionResult(
-                                    messages = listOf(ChatMessage("user", "Reply with exactly: OK"))
-                                )) {
-                                    is AiCallResult.Success -> "החיבור ל-${providerSelection.name} אומת בתשובת שרת אמיתית"
-                                    is AiCallResult.Failure -> result.safeMessage
-                                }
-                            }
-                        }
-                    ) { Text("בדיקת חיבור אמיתית") }
-                    Text(
-                        "אפשר לגלול בתוך חלון ההגדרות עד לכפתורי השמירה והבדיקה.",
-                        color = Color.Gray,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
+        return when (input["operation"]?.trim()?.lowercase()) {
+            "repo" -> call("GET", "/repos/$repo", token)
+            "read_file" -> {
+                val path = requireInput(input, "path")
+                val ref = input["ref"]?.takeIf { it.isNotBlank() }
+                val suffix = if (ref != null) "?ref=${urlEncode(ref)}" else ""
+                call("GET", "/repos/$repo/contents/${encodePath(path)}$suffix", token)
             }
-        } else {
-            TextButton(
-                onClick = { showApiSettings = true },
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) { Text("הגדרות חיבור AI") }
-        }
-
-        if (showGitHubSettings) {
-            ElevatedCard(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                colors = CardDefaults.elevatedCardColors(containerColor = ChatPanel)
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 330.dp)
-                        .verticalScroll(rememberScrollState())
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("GitHub Agent Connector", color = ChatGold, fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { showGitHubSettings = false }) { Text("סגירה") }
-                    }
-                    Text(
-                        "חיבור חד-פעמי. לאחר שמירה, שושי ולונה משתמשות באותו credential המוצפן בלי התחברות מחדש בכל פעולה.",
-                        color = Color.LightGray,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    OutlinedTextField(
-                        value = githubRepoInput,
-                        onValueChange = { githubRepoInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Repository — owner/name") },
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = githubTokenInput,
-                        onValueChange = { githubTokenInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("GitHub token") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true
-                    )
-                    Text(githubStatus, color = ChatGold, style = MaterialTheme.typography.bodySmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            enabled = githubTokenInput.isNotBlank() && githubRepoInput.isNotBlank(),
-                            onClick = {
-                                githubStatus = runCatching {
-                                    GitHubCredentialStore.save(githubTokenInput, githubRepoInput)
-                                    githubTokenInput = ""
-                                    "GitHub: נשמר מוצפן"
-                                }.getOrElse { "GitHub: ${it.message ?: "שמירה נכשלה"}" }
-                            }
-                        ) { Text("שמור GitHub מוצפן") }
-                        OutlinedButton(
-                            enabled = GitHubCredentialStore.isConfigured(),
-                            onClick = {
-                                githubStatus = "GitHub: בודקת חיבור אמיתי…"
-                                scope.launch {
-                                    githubStatus = runCatching {
-                                        val result = ConnectorRegistry.callConnector("github", mapOf("operation" to "repo"))
-                                        if (result.contains("\"full_name\"")) "GitHub: CONNECTED — repository verified" else "GitHub: תשובה התקבלה אך לא אומתה"
-                                    }.getOrElse { "GitHub: ${it.message ?: "connection failed"}" }
-                                }
-                            }
-                        ) { Text("בדיקת GitHub") }
-                    }
-                    TextButton(onClick = {
-                        GitHubCredentialStore.clear()
-                        githubTokenInput = ""
-                        githubStatus = "GitHub: נמחק מהמכשיר"
-                    }) { Text("מחק חיבור GitHub") }
-                }
+            "get_branch" -> {
+                val branch = requireInput(input, "branch")
+                call("GET", "/repos/$repo/branches/${urlEncode(branch)}", token)
             }
-        } else {
-            TextButton(
-                onClick = { showGitHubSettings = true },
-                modifier = Modifier.padding(horizontal = 12.dp)
-            ) {
-                Text(if (GitHubCredentialStore.isConfigured()) "GitHub: מחובר" else "חיבור GitHub")
+            "workflow_runs" -> {
+                val branch = input["branch"]?.takeIf { it.isNotBlank() }
+                val suffix = branch?.let { "?branch=${urlEncode(it)}&per_page=20" } ?: "?per_page=20"
+                call("GET", "/repos/$repo/actions/runs$suffix", token)
             }
-        }
-
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (ui.messages.isEmpty()) {
-                item {
-                    Text(
-                        "בחרי SHOSHI או LUNA. בקשה מפורשת כמו ‘תבנו לי תוכנית שיווק’ תיפתח כמשימה, תחולק בין שתיהן ותופיע במרכז השליטה. פקודות ‘משימות’, ‘סטטוס’ ו‘עצור הכל’ מבוצעות מקומית.",
-                        color = Color.Gray
-                    )
-                }
+            "run_artifacts" -> {
+                val runId = requireInput(input, "run_id")
+                call("GET", "/repos/$repo/actions/runs/${urlEncode(runId)}/artifacts", token)
             }
-            items(ui.messages, key = { it.id }) { msg -> WorkingCoreBubble(msg) }
-            ui.error?.let { error ->
-                item { Text("שגיאה: $error", color = MaterialTheme.colorScheme.error) }
+            "create_branch" -> {
+                requireApproved(input, "create GitHub branch")
+                val branch = requireInput(input, "branch")
+                val sourceSha = requireInput(input, "source_sha")
+                val body = gson.toJson(mapOf("ref" to "refs/heads/$branch", "sha" to sourceSha))
+                call("POST", "/repos/$repo/git/refs", token, body)
             }
-        }
-
-        val listening = sttState is SttState.Listening || sttState is SttState.Partial
-        sttStatusText(sttState)?.let { status ->
-            Text(status, color = Color.Gray, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-        }
-
-        Row(
-            Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                label = { Text("כתבי הודעה ל-${ui.selectedAgent.name}") },
-                enabled = !ui.isSending,
-                maxLines = 4
-            )
-            IconButton(
-                enabled = !ui.isSending,
-                onClick = {
-                    if (listening) {
-                        stt.cancel()
-                        VoiceEngine.stopSpeech()
-                    } else if (permissionState == AudioPermissionState.READY) {
-                        beginListening()
-                    } else {
-                        requestPermission()
-                    }
-                }
-            ) {
-                Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, contentDescription = "Voice")
+            "upsert_file" -> {
+                requireApproved(input, "commit file to GitHub")
+                val path = requireInput(input, "path")
+                val message = requireInput(input, "message")
+                val content = requireInput(input, "content")
+                val branch = requireInput(input, "branch")
+                val sha = input["sha"]?.takeIf { it.isNotBlank() }
+                val payload = linkedMapOf<String, String>(
+                    "message" to message,
+                    "content" to Base64.getEncoder().encodeToString(content.toByteArray(Charsets.UTF_8)),
+                    "branch" to branch
+                )
+                if (sha != null) payload["sha"] = sha
+                call("PUT", "/repos/$repo/contents/${encodePath(path)}", token, gson.toJson(payload))
             }
-            IconButton(
-                enabled = input.isNotBlank() && !ui.isSending,
-                onClick = {
-                    vm.send(input, speakResponse = false)
-                    input = ""
-                }
-            ) { Icon(Icons.Default.Send, contentDescription = "Send") }
-        }
-    }
-}
-
-@Composable
-private fun ExecutiveWorkingDance() {
-    val transition = rememberInfiniteTransition(label = "executive-working")
-    val phase by transition.animateFloat(
-        initialValue = -1f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(animation = tween(520), repeatMode = RepeatMode.Reverse),
-        label = "dance-phase"
-    )
-    Surface(
-        color = ChatGold.copy(alpha = 0.08f),
-        shape = RoundedCornerShape(18.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Image(
-                painter = painterResource(R.drawable.shoshi_executive),
-                contentDescription = "SHOSHI working",
-                modifier = Modifier.size(48.dp).graphicsLayer {
-                    translationY = phase * 8f
-                    rotationZ = phase * 5f
-                },
-                contentScale = ContentScale.Crop
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("שושי ולונה עובדות…", color = ChatGold, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(8.dp))
-            Image(
-                painter = painterResource(R.drawable.luna_executive),
-                contentDescription = "LUNA working",
-                modifier = Modifier.size(48.dp).graphicsLayer {
-                    translationY = -phase * 8f
-                    rotationZ = -phase * 5f
-                },
-                contentScale = ContentScale.Crop
+            "create_pr" -> {
+                requireApproved(input, "open GitHub pull request")
+                val title = requireInput(input, "title")
+                val head = requireInput(input, "head")
+                val base = input["base"]?.takeIf { it.isNotBlank() } ?: "main"
+                val bodyText = input["body"].orEmpty()
+                val body = gson.toJson(mapOf("title" to title, "head" to head, "base" to base, "body" to bodyText))
+                call("POST", "/repos/$repo/pulls", token, body)
+            }
+            "rerun_failed" -> {
+                requireApproved(input, "re-run failed GitHub Actions jobs")
+                val runId = requireInput(input, "run_id")
+                call("POST", "/repos/$repo/actions/runs/${urlEncode(runId)}/rerun-failed-jobs", token, "{}")
+            }
+            else -> failure(
+                "UNKNOWN_GITHUB_OPERATION",
+                "Supported operations: repo, read_file, get_branch, workflow_runs, run_artifacts, create_branch, upsert_file, create_pr, rerun_failed."
             )
         }
     }
-}
 
-@Composable
-private fun ConnectionBanner(state: AiConnectionState, error: String?) {
-    val (label, color) = when (state) {
-        AiConnectionState.IDLE -> "AI: NOT YET VERIFIED" to Color.Gray
-        AiConnectionState.CONNECTING -> "AI: CONNECTING" to Color(0xFFFFC107)
-        AiConnectionState.CONNECTED -> "AI: CONNECTED — REAL RESPONSE RECEIVED" to Color(0xFF4CAF50)
-        AiConnectionState.API_KEY_MISSING -> "AI: API KEY MISSING" to Color(0xFFFF9800)
-        AiConnectionState.OFFLINE -> "AI: OFFLINE" to Color.Red
-        AiConnectionState.RATE_LIMITED -> "AI: RATE LIMITED" to Color(0xFFFF9800)
-        AiConnectionState.ERROR -> "AI: ERROR" to Color.Red
+    private fun requireApproved(input: Map<String, String>, action: String) {
+        val approvalId = input["approval_id"]?.takeIf { it.isNotBlank() }
+            ?: throw SecurityException("Human approval is required to $action")
+        check(HumanApprovalGateway.isApproved(approvalId)) { "Human approval is not granted for $action" }
     }
-    Surface(color = color.copy(alpha = 0.16f), modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(label, color = color, fontWeight = FontWeight.Bold)
-            if (!error.isNullOrBlank()) Text(error, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+
+    private fun requireInput(input: Map<String, String>, key: String): String =
+        input[key]?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException("Missing GitHub input: $key")
+
+    private fun call(method: String, apiPath: String, token: String, body: String? = null): String {
+        require(apiPath.startsWith("/repos/")) { "Only repository-scoped GitHub API paths are allowed" }
+        val builder = Request.Builder()
+            .url("https://api.github.com$apiPath")
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "ShoshiLuna-Executive-Agent")
+
+        val requestBody = body?.toRequestBody(jsonMediaType)
+        when (method) {
+            "GET" -> builder.get()
+            "POST" -> builder.post(requestBody ?: "{}".toRequestBody(jsonMediaType))
+            "PUT" -> builder.put(requestBody ?: "{}".toRequestBody(jsonMediaType))
+            else -> error("Unsupported GitHub method: $method")
         }
-    }
-}
 
-@Composable
-private fun AgentSelector(
-    agent: ExecutiveAgent,
-    selected: Boolean,
-    image: Int,
-    enabled: Boolean,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    ElevatedCard(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier,
-        colors = CardDefaults.elevatedCardColors(containerColor = if (selected) Color(0xFF2A2214) else ChatPanel)
-    ) {
-        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                painter = painterResource(image),
-                contentDescription = agent.name,
-                modifier = Modifier.size(58.dp),
-                contentScale = ContentScale.Crop
-            )
-            Spacer(Modifier.width(8.dp))
-            Column {
-                Text(agent.name, color = ChatGold, fontWeight = FontWeight.Black)
-                Text(if (selected) "SELECTED" else "Select", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun WorkingCoreBubble(message: WorkingCoreMessage) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.fromUser) Arrangement.End else Arrangement.Start
-    ) {
-        Surface(
-            color = if (message.fromUser) Color(0xFF263238) else Color(0xFF17130D),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.widthIn(max = 520.dp)
-        ) {
-            Column(Modifier.padding(12.dp)) {
-                val label = when (message.source) {
-                    WorkingCoreMessageSource.USER -> "YOU → ${message.agent.name}"
-                    WorkingCoreMessageSource.AI -> "${message.agent.name} · AI"
-                    WorkingCoreMessageSource.COMMAND -> "SYSTEM COMMAND · ${message.agent.name}"
+        try {
+            client.newCall(builder.build()).execute().use { response ->
+                val responseBody = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val safe = safeGitHubError(response.code, responseBody)
+                    throw IllegalStateException(safe)
                 }
-                Text(label, color = ChatGold, fontWeight = FontWeight.Bold)
-                Text(message.text, color = Color.White)
+                if (response.code == 204) return success("GitHub operation completed.")
+                return responseBody.ifBlank { success("GitHub operation completed.") }
             }
+        } catch (error: SocketTimeoutException) {
+            throw IllegalStateException("GitHub connection timed out. Check internet access and try again.", error)
+        } catch (error: IOException) {
+            throw IllegalStateException("GitHub network connection failed. Check internet, DNS or VPN and try again.", error)
         }
     }
-}
 
-private fun sttStatusText(state: SttState): String? = when (state) {
-    SttState.Idle -> null
-    SttState.Listening -> "STT: מקשיבה..."
-    is SttState.Partial -> "STT: ${state.text}"
-    is SttState.Final -> "STT: ${state.text}"
-    is SttState.Error -> "STT ERROR: ${state.message}"
-    SttState.PermissionRequired -> "STT: נדרשת הרשאת מיקרופון"
-    SttState.ServiceUnavailable -> "STT: שירות זיהוי דיבור אינו זמין במכשיר"
+    private fun safeGitHubError(code: Int, rawBody: String): String {
+        val message = runCatching {
+            gson.fromJson(rawBody, JsonObject::class.java).get("message")?.asString
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+        return when (code) {
+            401 -> "GitHub rejected the token (HTTP 401). The token may be expired or invalid."
+            403 -> "GitHub denied access (HTTP 403). Check the token repository permissions and Actions permissions."
+            404 -> "GitHub repository was not found or the token has no access to it (HTTP 404). Check owner/name and repository access."
+            429 -> "GitHub rate limit reached (HTTP 429). Try again later."
+            in 500..599 -> "GitHub service error (HTTP $code). Try again later."
+            else -> "GitHub request failed (HTTP $code)${message?.let { ": $it" }.orEmpty()}"
+        }
+    }
+
+    private fun success(message: String): String = gson.toJson(mapOf("ok" to true, "message" to message))
+    private fun failure(code: String, message: String): String = gson.toJson(mapOf("ok" to false, "code" to code, "message" to message))
+
+    private fun encodePath(path: String): String = path.trim('/').split('/').joinToString("/") { urlEncode(it) }
+    private fun urlEncode(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
 }
