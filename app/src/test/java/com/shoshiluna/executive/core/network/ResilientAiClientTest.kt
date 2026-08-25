@@ -28,4 +28,24 @@ class ResilientAiClientTest {
         assertFalse(ResilientAiClient.shouldTryNextKey(rateLimited))
         assertTrue(ResilientAiClient.shouldFailOver(rateLimited))
     }
+
+    @Test fun `dead model route falls back without rotating credentials`() {
+        val notFound = AiCallResult.Failure(AiConnectionState.ERROR, "model route missing", 404)
+        val unprocessable = AiCallResult.Failure(AiConnectionState.ERROR, "model unsupported", 422)
+
+        assertFalse(ResilientAiClient.shouldTryNextKey(notFound))
+        assertFalse(ResilientAiClient.shouldTryNextKey(unprocessable))
+        assertTrue(ResilientAiClient.shouldFailOver(notFound))
+        assertTrue(ResilientAiClient.shouldFailOver(unprocessable))
+    }
+
+    @Test fun `request timeout and provider conflict fall back without rotating keys`() {
+        val timeout = AiCallResult.Failure(AiConnectionState.ERROR, "timeout", 408)
+        val conflict = AiCallResult.Failure(AiConnectionState.ERROR, "conflict", 409)
+
+        assertFalse(ResilientAiClient.shouldTryNextKey(timeout))
+        assertFalse(ResilientAiClient.shouldTryNextKey(conflict))
+        assertTrue(ResilientAiClient.shouldFailOver(timeout))
+        assertTrue(ResilientAiClient.shouldFailOver(conflict))
+    }
 }
