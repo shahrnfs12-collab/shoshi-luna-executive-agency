@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 enum class WorkingCoreMessageSource { USER, AI, COMMAND }
@@ -65,8 +66,6 @@ class WorkingCoreViewModel(
         val agent = _uiState.value.selectedAgent
         val userMessage = WorkingCoreMessage(agent = agent, fromUser = true, text = clean)
 
-        // Explicit USER commands are executed deterministically before the AI path.
-        // AI-generated text can never reach this bridge directly.
         when (val command = commandBridge.tryExecute(clean, agent)) {
             is CommandBridgeResult.Executed -> {
                 val resultMessage = WorkingCoreMessage(agent = agent, fromUser = false, text = command.message, source = WorkingCoreMessageSource.COMMAND)
@@ -131,7 +130,14 @@ class WorkingCoreViewModel(
                 }
             } else processed.modelPrompt
 
-            when (val result = gateway.send(agent, routedPrompt)) {
+            val result = withTimeoutOrNull(AI_REQUEST_TIMEOUT_MS) {
+                gateway.send(agent, routedPrompt)
+            } ?: AiCallResult.Failure(
+                AiConnectionState.OFFLINE,
+                "AI request timed out after trying the configured provider route. Try again; the next request will re-evaluate available providers."
+            )
+
+            when (result) {
                 is AiCallResult.Success -> {
                     val answer = WorkingCoreMessage(agent = agent, fromUser = false, text = result.text)
                     val partition = if (agent == ExecutiveAgent.SHOSHI) MemoryPartition.SHOSHI_PRIVATE else MemoryPartition.LUNA_PRIVATE
@@ -235,5 +241,9 @@ class WorkingCoreViewModel(
         data class Ready(val prompt: String) : GitHubContext
         data object NotConfigured : GitHubContext
         data class Failed(val message: String) : GitHubContext
+    }
+
+    private companion object {
+        const val AI_REQUEST_TIMEOUT_MS = 75_000L
     }
 }
