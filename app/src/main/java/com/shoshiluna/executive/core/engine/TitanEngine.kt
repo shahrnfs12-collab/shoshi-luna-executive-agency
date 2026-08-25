@@ -12,6 +12,8 @@ import com.shoshiluna.executive.core.network.ConnectorRegistry
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
 import com.shoshiluna.executive.core.external.ExternalOperationJournal
 import com.shoshiluna.executive.core.external.GenericHttpsAgentAdapter
+import com.shoshiluna.executive.core.external.OpenAiResponsesAgentAdapter
+import com.shoshiluna.executive.core.external.TrustedExternalAgentRegistry
 import com.shoshiluna.executive.core.github.GitHubCredentialStore
 import com.shoshiluna.executive.core.github.GitHubConnectorAdapter
 import com.shoshiluna.executive.core.video.VideoGenerationCredentialStore
@@ -50,6 +52,8 @@ object TitanEngine {
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
         ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
+        ExternalAgentGateway.registerAdapter(OpenAiResponsesAgentAdapter())
+        TrustedExternalAgentRegistry.bootstrapCodexOne()
         GitHubCredentialStore.initialize(context)
         ConnectorRegistry.register(GitHubConnectorAdapter())
     }
