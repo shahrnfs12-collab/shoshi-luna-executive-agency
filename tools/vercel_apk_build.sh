@@ -5,9 +5,11 @@ ROOT="$(pwd)"
 CACHE="$ROOT/.vercel-android"
 mkdir -p "$CACHE" "$ROOT/apk-out"
 
-if ! command -v java >/dev/null 2>&1; then
+JAVA_MAJOR="$(java -version 2>&1 | awk -F'[\".]' '/version/ {print $2; exit}' || true)"
+if [ "${JAVA_MAJOR:-0}" -lt 17 ]; then
   echo "Installing JDK 17..."
   curl -L --fail --retry 3 -o "$CACHE/jdk.tar.gz" "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
+  rm -rf "$CACHE/jdk"
   mkdir -p "$CACHE/jdk"
   tar -xzf "$CACHE/jdk.tar.gz" -C "$CACHE/jdk" --strip-components=1
   export JAVA_HOME="$CACHE/jdk"
