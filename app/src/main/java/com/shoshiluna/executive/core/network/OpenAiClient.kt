@@ -80,7 +80,13 @@ object OpenAiClient {
                 if (body.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned an empty HTTP body.")
                 val text = AiProviderPayloadCodec.decodeText(provider, body)
                 if (text.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned no usable message content.")
-                SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated ${provider.name} response")
+                if (!AiResponseQualityGate.isUsable(text)) {
+                    return@withContext fail(
+                        AiConnectionState.ERROR,
+                        "${provider.name} returned classifier-only output instead of a conversational answer."
+                    )
+                }
+                SystemHealthManager.updateHealth("AI_PROVIDER", EngineStatus.RUNNING, "Validated conversational ${provider.name} response")
                 CapabilityRegistry.update("ai", CapabilityStatus.READY, "Real provider response validated at runtime")
                 AiCallResult.Success(text)
             }
