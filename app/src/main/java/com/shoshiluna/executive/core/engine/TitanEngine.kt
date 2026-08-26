@@ -1,6 +1,7 @@
 package com.shoshiluna.executive.core.engine
 
 import android.content.Context
+import android.util.Log
 import com.shoshiluna.executive.core.agent.SovereignMemoryVault
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.business.ArtifactFactory
@@ -23,6 +24,7 @@ import java.util.Locale
  * Thread-safe atomic state management for the agency.
  */
 object TitanEngine {
+    private const val TAG = "TitanEngine"
     private val startTime = System.currentTimeMillis()
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var appContext: Context? = null
@@ -41,20 +43,33 @@ object TitanEngine {
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
-        EmpireMissionControl.initialize(context)
-        ArtifactFactory.initialize(context)
-        EvolutionEngine.initialize(context)
-        HumanApprovalGateway.initialize(context)
-        BuiltInToolBootstrap.initialize()
-        SovereignMemoryVault.initialize(context)
-        OpenAiClient.initialize(context)
-        ExternalOperationJournal.initialize(context)
-        ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
-        // Core network + memory + controlled external-agent runtime are initialized from the application context.
+        var degraded = false
+
+        fun safeInit(name: String, block: () -> Unit) {
+            try {
+                block()
+                Log.i(TAG, "$name initialized")
+            } catch (t: Throwable) {
+                degraded = true
+                Log.e(TAG, "$name initialization failed; continuing in degraded mode", t)
+            }
+        }
+
+        safeInit("EmpireMissionControl") { EmpireMissionControl.initialize(context) }
+        safeInit("ArtifactFactory") { ArtifactFactory.initialize(context) }
+        safeInit("EvolutionEngine") { EvolutionEngine.initialize(context) }
+        safeInit("HumanApprovalGateway") { HumanApprovalGateway.initialize(context) }
+        safeInit("BuiltInToolBootstrap") { BuiltInToolBootstrap.initialize() }
+        safeInit("SovereignMemoryVault") { SovereignMemoryVault.initialize(context) }
+        safeInit("OpenAiClient") { OpenAiClient.initialize(context) }
+        safeInit("ExternalOperationJournal") { ExternalOperationJournal.initialize(context) }
+        safeInit("ExternalAgentGateway") { ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter()) }
+
+        _systemStatus.value = if (degraded) "DEGRADED" else "HEALTHY"
     }
 
-    fun setChatActive(active: Boolean) { 
-        _isChatActive.value = active 
+    fun setChatActive(active: Boolean) {
+        _isChatActive.value = active
     }
 
     fun applicationContext(): Context? = appContext
