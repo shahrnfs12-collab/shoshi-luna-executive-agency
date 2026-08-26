@@ -18,6 +18,7 @@ fun BusinessCommandScreen() {
     val revenueRecords by RevenueLedger.records.collectAsState()
     val allocatedBalance by TreasuryLedger.totalAllocatedBalance.collectAsState(0.0)
     val fundedBalance by TreasuryLedger.totalFundedBalance.collectAsState(0.0)
+    val allocations by TreasuryLedger.allocations.collectAsState()
     
     Scaffold(
         topBar = {
@@ -36,7 +37,7 @@ fun BusinessCommandScreen() {
                 KpiDashboard(kpis)
             }
             item {
-                TreasurySummary(allocatedBalance, fundedBalance)
+                TreasurySummary(allocatedBalance, fundedBalance, allocations.lastOrNull()?.distribution)
             }
             item {
                 Text("REVENUE LEDGER", color = Color(0xFFD8B45A), style = MaterialTheme.typography.titleMedium)
@@ -63,17 +64,21 @@ fun BusinessCommandScreen() {
 }
 
 @Composable
-fun TreasurySummary(allocated: Double, funded: Double) {
+fun TreasurySummary(allocated: Double, funded: Double, distribution: ProfitDistributionBreakdown?) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("AGENCY TREASURY", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
-            KpiRow("ALLOCATED (5% Reserve)", "$${allocated}", Color.Yellow)
+            KpiRow("DEVELOPMENT RESERVE (20%)", "$${allocated}", Color.Yellow)
             KpiRow("FUNDED (Verified Real)", "$${funded}", Color.Green)
+            HorizontalDivider(color = Color.DarkGray)
+            KpiRow("OWNER BANK (40%)", "$${distribution?.bankAmount ?: 0.0}", Color.White)
+            KpiRow("DIGITAL WALLET (40%)", "$${distribution?.digitalWalletAmount ?: 0.0}", Color.White)
+            KpiRow("SHOSHI/LUNA DEVELOPMENT (20%)", "$${distribution?.developmentAmount ?: 0.0}", Color.Yellow)
             Text(
-                "Note: Allocated funds are accounting reserves. Funded funds are verified physical balances.",
+                "Calculated from verified net profit. Every external transfer requires owner approval; routing details are not exposed to AI agents.",
                 color = Color.Gray,
                 style = MaterialTheme.typography.labelSmall
             )
