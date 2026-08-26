@@ -8,7 +8,8 @@ import kotlin.math.max
 
 /**
  * ShoshiLuna Agency Treasury Ledger.
- * Hard Invariant: ALLOCATION = 5% of VERIFIED NET PROFIT.
+ * Hard invariant: distribution is calculated only from VERIFIED NET PROFIT.
+ * Calculation never authorizes or executes an external transfer.
  */
 object TreasuryLedger {
     private val _allocations = MutableStateFlow<List<TreasuryAllocation>>(emptyList())
@@ -32,7 +33,7 @@ object TreasuryLedger {
     }
 
     /**
-     * Perform the 5% allocation based on verified net profit.
+     * Calculate the owner-defined 40/40/20 distribution from verified net profit.
      * Rule: Only RECEIVED revenue and VERIFIED costs.
      */
     fun performAllocation(
@@ -59,7 +60,12 @@ object TreasuryLedger {
         
         if (netProfit <= 0) return null
 
-        val allocationAmount = netProfit * 0.05
+        val distribution = ProfitDistributionBreakdown(
+            verifiedNetProfit = netProfit,
+            bankAmount = netProfit * ProfitDistributionPolicy.BANK_RATE,
+            digitalWalletAmount = netProfit * ProfitDistributionPolicy.DIGITAL_WALLET_RATE,
+            developmentAmount = netProfit * ProfitDistributionPolicy.DEVELOPMENT_RATE
+        )
         
         val allocation = TreasuryAllocation(
             sourceRevenueIds = verifiedRevenue.map { it.id },
@@ -67,7 +73,8 @@ object TreasuryLedger {
             verifiedGrossRevenue = grossRevenue,
             verifiedCosts = costs,
             verifiedNetProfit = netProfit,
-            allocationAmount = allocationAmount,
+            allocationAmount = distribution.developmentAmount,
+            distribution = distribution,
             environment = environment
         )
 
