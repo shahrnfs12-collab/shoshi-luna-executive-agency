@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    {
-      "source": "/mcp",
-      "destination": "/api/index"
-    }
-  ]
+  "installCommand": "",
+  "buildCommand": "bash tools/vercel_apk_build.sh",
+  "outputDirectory": "apk-out"
 }
