@@ -22,6 +22,10 @@ sealed class CommandBridgeResult {
         val message: String,
         val command: String
     ) : CommandBridgeResult()
+    data class ClarificationRequired(
+        val message: String,
+        val command: String
+    ) : CommandBridgeResult()
 }
 
 class CommandExecutionBridge {
@@ -39,6 +43,10 @@ class CommandExecutionBridge {
             normalized in RELEASE_COMMANDS -> CommandBridgeResult.Rejected(
                 message = "שחרור Emergency Halt דורש אישור מפורש דרך כפתור הבטיחות בממשק.",
                 command = "RELEASE_HALT"
+            )
+            normalized in VAGUE_WORK_COMMANDS -> CommandBridgeResult.ClarificationRequired(
+                message = "כמה כסף אתה רוצה שהסוכנות תייצר, ובאיזה טווח זמן? אם לא תגדיר תקציב ורמת סיכון, אתחיל מתכנית ללא הוצאה כספית ואביא אותה לאישור לפני כל פעולה חיצונית או כספית.",
+                command = "CLARIFY_REVENUE_GOAL"
             )
             extractMissionTitle(text) != null -> executeCreateMission(
                 title = requireNotNull(extractMissionTitle(text)),
@@ -161,5 +169,10 @@ class CommandExecutionBridge {
             "halt", "emergency halt", "עצור", "עצרי", "עצור הכל", "עצרי הכל", "עצירת חירום"
         )
         private val RELEASE_COMMANDS = setOf("release", "release halt", "שחרר", "שחררי", "שחרר עצירת חירום", "שחררי עצירת חירום")
+        private val VAGUE_WORK_COMMANDS = setOf(
+            "לכי לעבוד", "לך לעבוד", "לכו לעבוד", "תעבדי", "תעבדו", "תתחילי לעבוד", "תתחילו לעבוד",
+            "תעשי כסף", "תעשו כסף", "תכניסי כסף", "תכניסו כסף", "תייצרי כסף", "תייצרו כסף",
+            "go work", "start working", "make money", "go make money"
+        )
     }
 }

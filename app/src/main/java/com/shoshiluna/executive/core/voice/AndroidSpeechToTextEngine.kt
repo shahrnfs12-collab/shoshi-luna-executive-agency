@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -29,6 +31,7 @@ class AndroidSpeechToTextEngine(
     private val preferredLocale: Locale = Locale.getDefault()
 ) {
     private val appContext = context.applicationContext
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val _state = MutableStateFlow<SttState>(SttState.Idle)
     val state: StateFlow<SttState> = _state.asStateFlow()
     private var recognizer: SpeechRecognizer? = null
@@ -38,9 +41,14 @@ class AndroidSpeechToTextEngine(
     fun isAvailable(): Boolean = SpeechRecognizer.isRecognitionAvailable(appContext)
 
     fun startListening(onFinalTranscript: (String) -> Unit) {
+        startListeningAttempt(onFinalTranscript, retryCount = 0)
+    }
+
+    private fun startListeningAttempt(onFinalTranscript: (String) -> Unit, retryCount: Int) {
         if (released) return
         if (!hasPermission()) { _state.value = SttState.PermissionRequired; return }
         if (!isAvailable()) { _state.value = SttState.ServiceUnavailable; return }
+
         destroyRecognizerOnly()
         recognizer = SpeechRecognizer.createSpeechRecognizer(appContext).apply {
             setRecognitionListener(object : RecognitionListener {
@@ -49,11 +57,23 @@ class AndroidSpeechToTextEngine(
                 override fun onRmsChanged(rmsdB: Float) = Unit
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
                 override fun onEndOfSpeech() = Unit
-                override fun onError(error: Int) { if (!released) _state.value = SttState.Error(error, errorMessage(error)) }
+                override fun onError(error: Int) {
+                    if (released) return
+                    val recoverable = error == SpeechRecognizer.ERROR_CLIENT || error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY
+                    if (recoverable && retryCount < 1) {
+                        _state.value = SttState.Idle
+                        destroyRecognizerOnly()
+                        mainHandler.postDelayed({
+                            if (!released) startListeningAttempt(onFinalTranscript, retryCount + 1)
+                        }, 300L)
+                    } else {
+                        _state.value = SttState.Error(error, errorMessage(error))
+                    }
+                }
                 override fun onResults(results: Bundle?) {
                     if (released) return
                     val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().trim()
-                    _state.value = SttState.Final(text)
+                    _state.value = if (text.isBlank()) SttState.Idle else SttState.Final(text)
                     if (text.isNotBlank()) onFinalTranscript(text)
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
@@ -64,19 +84,42 @@ class AndroidSpeechToTextEngine(
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
             })
         }
+
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, preferredLocale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, preferredLocale.toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
         }
         runCatching { recognizer?.startListening(intent) }
-            .onFailure { _state.value = SttState.Error(-1, "Failed to start recognizer: ${it.message}") }
+            .onFailure {
+                if (retryCount < 1) {
+                    destroyRecognizerOnly()
+                    mainHandler.postDelayed({
+                        if (!released) startListeningAttempt(onFinalTranscript, retryCount + 1)
+                    }, 300L)
+                } else {
+                    _state.value = SttState.Error(-1, "Failed to start recognizer: ${it.message}")
+                }
+            }
     }
 
     fun stopListening() { if (!released) runCatching { recognizer?.stopListening() } }
-    fun cancel() { if (!released) { runCatching { recognizer?.cancel() }; _state.value = SttState.Idle } }
-    fun release() { if (released) return; released = true; destroyRecognizerOnly(); _state.value = SttState.Idle }
+    fun cancel() {
+        if (!released) {
+            mainHandler.removeCallbacksAndMessages(null)
+            runCatching { recognizer?.cancel() }
+            _state.value = SttState.Idle
+        }
+    }
+    fun release() {
+        if (released) return
+        released = true
+        mainHandler.removeCallbacksAndMessages(null)
+        destroyRecognizerOnly()
+        _state.value = SttState.Idle
+    }
 
     private fun destroyRecognizerOnly() {
         runCatching { recognizer?.cancel() }
@@ -86,14 +129,14 @@ class AndroidSpeechToTextEngine(
 
     private fun errorMessage(code: Int): String = when (code) {
         SpeechRecognizer.ERROR_AUDIO -> "Audio error"
-        SpeechRecognizer.ERROR_CLIENT -> "Client error"
+        SpeechRecognizer.ERROR_CLIENT -> "Speech recognizer client error after automatic retry"
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission denied"
-        SpeechRecognizer.ERROR_NETWORK -> "Network error"
-        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+        SpeechRecognizer.ERROR_NETWORK -> "Speech recognition network error"
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech recognition network timeout"
         SpeechRecognizer.ERROR_NO_MATCH -> "No recognition match"
-        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
-        SpeechRecognizer.ERROR_SERVER -> "Recognizer server error"
-        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Speech timeout"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognizer busy after automatic retry"
+        SpeechRecognizer.ERROR_SERVER -> "Speech recognizer server error"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected"
         else -> "Speech recognition error $code"
     }
 }

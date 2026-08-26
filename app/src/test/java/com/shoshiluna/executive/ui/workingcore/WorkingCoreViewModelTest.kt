@@ -72,4 +72,21 @@ class WorkingCoreViewModelTest {
         assertEquals(1, calls)
         assertTrue(vm.uiState.value.messages.count { it.fromUser } == 1)
     }
+
+    @Test
+    fun vagueWorkCommandAsksForRevenueTargetWithoutCallingProvider() = runTest(dispatcher) {
+        var calls = 0
+        val fake = object : WorkingCoreAiGateway {
+            override suspend fun send(agent: ExecutiveAgent, prompt: String): AiCallResult {
+                calls++
+                return AiCallResult.Success("should-not-run")
+            }
+        }
+        val vm = WorkingCoreViewModel(fake)
+        vm.send("לכי לעבוד")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(0, calls)
+        assertTrue(vm.uiState.value.messages.last().text.contains("כמה כסף"))
+        assertFalse(vm.uiState.value.isSending)
+    }
 }

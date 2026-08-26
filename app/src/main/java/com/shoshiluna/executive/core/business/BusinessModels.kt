@@ -95,14 +95,47 @@ data class TreasuryAllocation(
     val verifiedGrossRevenue: Double,
     val verifiedCosts: Double,
     val verifiedNetProfit: Double,
-    val allocationRate: Double = 0.05,
+    val allocationRate: Double = ProfitDistributionPolicy.DEVELOPMENT_RATE,
     val allocationAmount: Double,
+    val distribution: ProfitDistributionBreakdown,
     val status: TreasuryStatus = TreasuryStatus.ALLOCATED,
     val environment: Environment = Environment.SIMULATION,
     val createdAt: Long = System.currentTimeMillis(),
     val auditId: String = UUID.randomUUID().toString(),
     val verificationRef: String? = null
 )
+
+/**
+ * Owner-defined distribution of VERIFIED NET PROFIT.
+ * Destination aliases are deliberately non-sensitive: routing details never belong in AI context.
+ */
+object ProfitDistributionPolicy {
+    const val BANK_RATE = 0.40
+    const val DIGITAL_WALLET_RATE = 0.40
+    const val DEVELOPMENT_RATE = 0.20
+    const val BANK_DESTINATION_ALIAS = "OWNER_BANK"
+    const val DIGITAL_WALLET_DESTINATION_ALIAS = "OWNER_DIGITAL_WALLET"
+    const val DEVELOPMENT_DESTINATION_ALIAS = "SHOSHI_LUNA_DEVELOPMENT"
+
+    init {
+        check(BANK_RATE + DIGITAL_WALLET_RATE + DEVELOPMENT_RATE == 1.0) {
+            "Profit distribution must total 100%"
+        }
+    }
+}
+
+data class ProfitDistributionBreakdown(
+    val verifiedNetProfit: Double,
+    val bankAmount: Double,
+    val digitalWalletAmount: Double,
+    val developmentAmount: Double,
+    val bankDestinationAlias: String = ProfitDistributionPolicy.BANK_DESTINATION_ALIAS,
+    val digitalWalletDestinationAlias: String = ProfitDistributionPolicy.DIGITAL_WALLET_DESTINATION_ALIAS,
+    val developmentDestinationAlias: String = ProfitDistributionPolicy.DEVELOPMENT_DESTINATION_ALIAS,
+    val requiresOwnerApproval: Boolean = true
+) {
+    val totalAmount: Double get() = bankAmount + digitalWalletAmount + developmentAmount
+}
 
 data class TreasurySpendProposal(
     val id: String = UUID.randomUUID().toString(),
