@@ -30,10 +30,10 @@ sealed interface AiCallResult {
 object OpenAiClient {
     private const val DEFAULT_MODEL = "gpt-5.6-luna"
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(16, TimeUnit.SECONDS)
-        .writeTimeout(16, TimeUnit.SECONDS)
-        .callTimeout(16, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(100, TimeUnit.SECONDS)
         .build()
     private val gson = Gson()
     private val mediaType = "application/json; charset=utf-8".toMediaType()
@@ -91,7 +91,7 @@ object OpenAiClient {
                 AiCallResult.Success(text)
             }
         } catch (_: SocketTimeoutException) {
-            fail(AiConnectionState.OFFLINE, "${provider.name} request timed out after 16 seconds.")
+            fail(AiConnectionState.OFFLINE, "${provider.name} request timed out after 100 seconds.")
         } catch (_: IOException) {
             fail(AiConnectionState.OFFLINE, "${provider.name} network connection failed.")
         } catch (_: Exception) {
