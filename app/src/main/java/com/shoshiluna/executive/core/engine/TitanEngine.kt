@@ -25,11 +25,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 object TitanEngine {
     private val startTime = System.currentTimeMillis()
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var appContext: Context? = null
+    private val initialized = AtomicBoolean(false)
 
     private val _networkLatency = MutableStateFlow(0L)
     val networkLatency = _networkLatency.asStateFlow()
@@ -41,23 +43,29 @@ object TitanEngine {
     val systemStatus = _systemStatus.asStateFlow()
 
     fun initialize(context: Context) {
+        if (!initialized.compareAndSet(false, true)) return
         appContext = context.applicationContext
-        EmpireMissionControl.initialize(context)
-        ArtifactFactory.initialize(context)
-        EvolutionEngine.initialize(context)
-        HumanApprovalGateway.initialize(context)
-        VideoWorkspace.initialize(context)
-        VideoGenerationCredentialStore.initialize(context)
-        BuiltInToolBootstrap.initialize()
-        RevenueAgentNetwork.initialize(context)
-        SovereignMemoryVault.initialize(context)
-        OpenAiClient.initialize(context)
-        ExternalOperationJournal.initialize(context)
-        ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter())
-        ExternalAgentGateway.registerAdapter(OpenAiResponsesAgentAdapter())
-        TrustedExternalAgentRegistry.bootstrapCodexOne()
-        GitHubCredentialStore.initialize(context)
-        ConnectorRegistry.register(GitHubConnectorAdapter())
+        val failures = mutableListOf<String>()
+        fun safe(name: String, block: () -> Unit) {
+            runCatching(block).onFailure { failures += "$name:${it.javaClass.simpleName}" }
+        }
+        safe("missions") { EmpireMissionControl.initialize(context) }
+        safe("artifacts") { ArtifactFactory.initialize(context) }
+        safe("evolution") { EvolutionEngine.initialize(context) }
+        safe("approvals") { HumanApprovalGateway.initialize(context) }
+        safe("video") { VideoWorkspace.initialize(context) }
+        safe("videoCredentials") { VideoGenerationCredentialStore.initialize(context) }
+        safe("tools") { BuiltInToolBootstrap.initialize() }
+        safe("revenueAgents") { RevenueAgentNetwork.initialize(context) }
+        safe("memory") { SovereignMemoryVault.initialize(context) }
+        safe("openAi") { OpenAiClient.initialize(context) }
+        safe("externalJournal") { ExternalOperationJournal.initialize(context) }
+        safe("genericAdapter") { ExternalAgentGateway.registerAdapter(GenericHttpsAgentAdapter()) }
+        safe("openAiAdapter") { ExternalAgentGateway.registerAdapter(OpenAiResponsesAgentAdapter()) }
+        safe("codexOne") { TrustedExternalAgentRegistry.bootstrapCodexOne() }
+        safe("githubCredentials") { GitHubCredentialStore.initialize(context) }
+        safe("githubConnector") { ConnectorRegistry.register(GitHubConnectorAdapter()) }
+        _systemStatus.value = if (failures.isEmpty()) "HEALTHY" else "DEGRADED:${failures.joinToString(",")}"
     }
 
     fun setChatActive(active: Boolean) { _isChatActive.value = active }

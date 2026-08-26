@@ -185,13 +185,22 @@ object ApiKeyManager {
     private fun prefs(context: Context): SharedPreferences {
         cachedPrefs?.let { return it }
         return synchronized(this) {
-            cachedPrefs ?: EncryptedSharedPreferences.create(
-                context.applicationContext,
-                PREFS_NAME,
-                MasterKey.Builder(context.applicationContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            ).also { cachedPrefs = it }
+            cachedPrefs ?: run {
+                val appContext = context.applicationContext
+                fun create() = EncryptedSharedPreferences.create(
+                    appContext,
+                    PREFS_NAME,
+                    MasterKey.Builder(appContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+                runCatching { create() }.getOrElse {
+                    // A restored preference file can no longer be decrypted after reinstall/signing changes.
+                    // Recover the app instead of crashing at launch. Credentials must be entered again.
+                    appContext.deleteSharedPreferences(PREFS_NAME)
+                    create()
+                }.also { cachedPrefs = it }
+            }
         }
     }
 }
