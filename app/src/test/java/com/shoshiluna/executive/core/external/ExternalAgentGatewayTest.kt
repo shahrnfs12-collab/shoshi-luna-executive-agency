@@ -32,8 +32,8 @@ class ExternalAgentGatewayTest {
         TrustedExternalAgentRegistry.bootstrapCodexOne()
         val codex = TrustedExternalAgentRegistry.get(TrustedExternalAgentRegistry.CODEX_ONE_ID)
         assertNotNull(codex)
-        assertEquals("CODEX-1 • First Recruited Agent", codex!!.displayName)
-        assertEquals(ExternalProtocol.OPENAI_RESPONSES, codex.protocol)
+        assertEquals("CODEX-1 • OpenRouter Community Agent", codex!!.displayName)
+        assertEquals(ExternalProtocol.OPENROUTER_CHAT, codex.protocol)
         assertEquals(ExternalTrustStatus.PENDING, codex.trustStatus)
         assertTrue(TrustedExternalAgentRegistry.trusted().isEmpty())
     }
