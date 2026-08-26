@@ -1,0 +1,42 @@
+name: HeartLink MCP CI
+
+on:
+  push:
+    branches:
+      - feature/heartlink-mcp-bridge
+  pull_request:
+    paths:
+      - 'heartlink_bridge/**'
+      - '.github/workflows/heartlink-mcp-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install MCP SDK
+        run: pip install 'mcp==2.0.0'
+      - name: Compile bridge
+        run: python -m py_compile heartlink_bridge/server.py
+      - name: Verify fail-closed path boundary
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, 'heartlink_bridge')
+          import server
+          assert server._safe_path('app/src/main/AndroidManifest.xml')
+          for path in ('../outside.txt', 'local.properties', 'release/signing.keystore', 'secrets/key.txt'):
+              try:
+                  server._safe_path(path)
+              except (ValueError, PermissionError):
+                  pass
+              else:
+                  raise AssertionError(f'unsafe path was accepted: {path}')
+          print('HeartLink boundary checks passed')
+          PY
