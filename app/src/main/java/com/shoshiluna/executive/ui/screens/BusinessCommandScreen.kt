@@ -19,6 +19,8 @@ fun BusinessCommandScreen() {
     val allocatedBalance by TreasuryLedger.totalAllocatedBalance.collectAsState(0.0)
     val fundedBalance by TreasuryLedger.totalFundedBalance.collectAsState(0.0)
     val allocations by TreasuryLedger.allocations.collectAsState()
+    val revenueAgents by RevenueAgentNetwork.agents.collectAsState()
+    val agentReports by RevenueAgentNetwork.reports.collectAsState()
     
     Scaffold(
         topBar = {
@@ -40,6 +42,9 @@ fun BusinessCommandScreen() {
                 TreasurySummary(allocatedBalance, fundedBalance, allocations.lastOrNull()?.distribution)
             }
             item {
+                RevenueAgentNetworkSummary(revenueAgents.values.toList(), agentReports)
+            }
+            item {
                 Text("REVENUE LEDGER", color = Color(0xFFD8B45A), style = MaterialTheme.typography.titleMedium)
             }
             items(revenueRecords) { record ->
@@ -59,6 +64,24 @@ fun BusinessCommandScreen() {
                     Text("RUN BUSINESS SIMULATION")
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun RevenueAgentNetworkSummary(agents: List<RevenueLearningAgent>, reports: List<RevenueAgentReport>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF111111))
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("REVENUE LEARNING NETWORK", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
+            KpiRow("DAILY TARGET — NOT GUARANTEED", "$${RevenueAgentNetwork.DAILY_REVENUE_TARGET_USD.toInt()}", Color.Cyan)
+            agents.sortedBy { it.role.ordinal }.forEach { agent ->
+                KpiRow(agent.role.name, agent.status.name, if (agent.status == RevenueAgentRunStatus.REPORTED) Color.Green else Color.White)
+            }
+            Text("Reports to SHOSHI: ${reports.size} • AI findings remain unverified until evidence review.", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+            Text("Publishing, outreach, purchases and transfers require owner approval.", color = Color.Yellow, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
