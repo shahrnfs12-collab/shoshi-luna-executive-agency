@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SHOSHI LUNA APK</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#111;color:#fff;display:grid;place-items:center;min-height:100vh}
+    .card{width:min(92vw,520px);padding:28px;border-radius:24px;background:#1b1b1b;box-shadow:0 12px 40px #0008}
+    button{width:100%;padding:16px;border:0;border-radius:14px;font-size:18px;font-weight:700}
+    progress{width:100%;height:18px;margin-top:18px}
+    #s{margin-top:12px;line-height:1.5;color:#ddd}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>SHOSHI LUNA</h1>
+    <p>הורדת ה־APK המתוקן ישירות, בלי Vercel SSO.</p>
+    <button id="b">הורד APK</button>
+    <progress id="p" max="100" value="0"></progress>
+    <div id="s">מוכן.</div>
+  </div>
+<script>
+const b=document.getElementById('b'),p=document.getElementById('p'),s=document.getElementById('s');
+b.onclick=async()=>{
+  b.disabled=true; p.value=0; s.textContent='בודק את הקובץ…';
+  try{
+    const meta=await fetch('/api/apk_chunk?meta=1',{cache:'no-store'});
+    if(!meta.ok) throw new Error('meta '+meta.status);
+    const {size,chunk}=await meta.json();
+    const parts=[]; let done=0;
+    for(let start=0; start<size; start+=chunk){
+      const end=Math.min(size-1,start+chunk-1);
+      s.textContent=`מוריד ${Math.round(done/size*100)}%…`;
+      const r=await fetch(`/api/apk_chunk?start=${start}&end=${end}`,{cache:'no-store'});
+      if(!r.ok) throw new Error('chunk '+r.status);
+      const buf=await r.arrayBuffer();
+      parts.push(buf); done+=buf.byteLength; p.value=Math.min(100,done/size*100);
+    }
+    s.textContent='מכין את הקובץ…';
+    const blob=new Blob(parts,{type:'application/vnd.android.package-archive'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='ShoshiLuna-fixed.apk';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    p.value=100; s.textContent='ההורדה הושלמה.';
+  }catch(e){s.textContent='שגיאה: '+e.message; b.disabled=false;}
+};
+</script>
+</body>
+</html>
