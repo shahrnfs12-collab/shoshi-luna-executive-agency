@@ -1,5 +1,8 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bash tools/vercel_apk_build.sh",
-  "outputDirectory": "apk-out"
+  "functions": {
+    "api/apk_chunk.py": {
+      "includeFiles": "ShoshiLuna-2.5.3-full-runtime.apk",
+      "maxDuration": 60
+    }
+  }
 }

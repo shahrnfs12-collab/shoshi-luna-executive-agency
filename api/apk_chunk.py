@@ -1,13 +1,10 @@
 import base64
 import json
-import os
 import urllib.parse
-import urllib.request
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 
-PREVIEW_BASE = "https://shoshi-luna-executive-agency-chcf6y07o-shahrnfs12-1551.vercel.app"
-SHARE_TOKEN = "8KJ4PYlERjuRlgQLOMWu49SEwjfEHIj3"
-APK_PATH = "/ShoshiLuna-2.5.3-full-runtime.apk"
+APK_NAME = "ShoshiLuna-2.5.3-full-runtime.apk"
 CHUNK_SIZE = 2 * 1024 * 1024
 
 
@@ -15,12 +12,11 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            request = urllib.request.Request(
-                PREVIEW_BASE + APK_PATH,
-                headers={"x-vercel-protection-bypass": SHARE_TOKEN},
-            )
-            with urllib.request.urlopen(request, timeout=30) as response:
-                data = response.read()
+            candidates = [Path.cwd() / APK_NAME, Path(__file__).resolve().parent.parent / APK_NAME]
+            apk = next((path for path in candidates if path.is_file()), None)
+            if apk is None:
+                raise FileNotFoundError("Bundled APK is unavailable")
+            data = apk.read_bytes()
             if not data.startswith(b"PK"):
                 raise ValueError("Upstream artifact is not an APK")
 
