@@ -42,6 +42,7 @@ import com.shoshiluna.executive.core.network.ConnectorRegistry
 import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.presentation.VoiceEngine
 import com.shoshiluna.executive.core.security.ApiKeyManager
+import com.shoshiluna.executive.core.business.RevenueAgentNetwork
 import com.shoshiluna.executive.core.voice.AndroidSpeechToTextEngine
 import com.shoshiluna.executive.core.voice.AudioPermissionState
 import com.shoshiluna.executive.core.voice.SttState
@@ -228,6 +229,7 @@ fun WorkingCoreChatScreen(vm: WorkingCoreViewModel = viewModel()) {
                                     is AiCallResult.Success -> "החיבור ל-${providerSelection.name} אומת בתשובת שרת אמיתית"
                                     is AiCallResult.Failure -> result.safeMessage
                                 }
+                                if (keyStatus?.contains("אומת בתשובת שרת אמיתית") == true) RevenueAgentNetwork.activate(context)
                             }
                         }
                     ) { Text("בדיקת חיבור אמיתית") }
