@@ -7,6 +7,7 @@ import com.shoshiluna.executive.core.business.ArtifactFactory
 import com.shoshiluna.executive.core.evolution.EvolutionEngine
 import com.shoshiluna.executive.core.security.HumanApprovalGateway
 import com.shoshiluna.executive.core.business.BuiltInToolBootstrap
+import com.shoshiluna.executive.core.business.RevenueAgentNetwork
 import com.shoshiluna.executive.core.network.OpenAiClient
 import com.shoshiluna.executive.core.network.ConnectorRegistry
 import com.shoshiluna.executive.core.external.ExternalAgentGateway
@@ -48,6 +49,7 @@ object TitanEngine {
         VideoWorkspace.initialize(context)
         VideoGenerationCredentialStore.initialize(context)
         BuiltInToolBootstrap.initialize()
+        RevenueAgentNetwork.initialize(context)
         SovereignMemoryVault.initialize(context)
         OpenAiClient.initialize(context)
         ExternalOperationJournal.initialize(context)
