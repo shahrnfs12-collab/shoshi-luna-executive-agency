@@ -20,7 +20,7 @@ class DreamAgentIdentityTest {
 
     @Test
     fun dreamModelPolicyUsesCurrentFrontierModel() {
-        assertTrue(AgentModelPolicy.modelFor(ExecutiveAgent.SHOSHI) == "gpt-5.6-sol")
-        assertTrue(AgentModelPolicy.modelFor(ExecutiveAgent.LUNA) == "gpt-5.6-sol")
+        assertTrue(AgentModelPolicy.modelFor(ExecutiveAgent.SHOSHI) == AgentModelPolicy.DREAM_DEFAULT_MODEL)
+        assertTrue(AgentModelPolicy.modelFor(ExecutiveAgent.LUNA) == AgentModelPolicy.DREAM_DEFAULT_MODEL)
     }
 }

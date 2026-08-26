@@ -5,6 +5,8 @@ enum class AiProviderId {
     ANTHROPIC,
     GOOGLE_GEMINI,
     OPENROUTER,
+    OPENROUTER_UNCENSORED,
+    GROQ,
     CUSTOM
 }
 
@@ -29,7 +31,8 @@ object AiProviderRegistry {
         return when {
             secret.startsWith("sk-ant-") -> detected(AiProviderId.ANTHROPIC, "Anthropic key prefix")
             secret.startsWith("AIza") -> detected(AiProviderId.GOOGLE_GEMINI, "Google API key prefix")
-            secret.startsWith("sk-or-") -> detected(AiProviderId.OPENROUTER, "OpenRouter key prefix")
+            secret.startsWith("sk-or-") -> detected(AiProviderId.OPENROUTER, "OpenRouter key prefix; usable by standard or uncensored OpenRouter profiles")
+            secret.startsWith("gsk_") -> detected(AiProviderId.GROQ, "Groq key prefix")
             secret.startsWith("sk-proj-") -> detected(AiProviderId.OPENAI, "OpenAI project key prefix")
             secret.startsWith("sk-") -> DetectedAiProvider(
                 provider = null,

@@ -1,1 +1,0 @@
-Trigger dedicated APK build for the current main snapshot.
