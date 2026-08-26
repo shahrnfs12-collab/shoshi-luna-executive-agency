@@ -4,7 +4,7 @@ import urllib.parse
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 
-APK_NAME = "ShoshiLuna-2.5.3-full-runtime.apk"
+APK_NAME = "ShoshiLuna-latest.apk"
 CHUNK_SIZE = 2 * 1024 * 1024
 
 
@@ -12,7 +12,11 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            candidates = [Path.cwd() / APK_NAME, Path(__file__).resolve().parent.parent / APK_NAME]
+            candidates = [
+                Path.cwd() / "apk-out" / APK_NAME,
+                Path(__file__).resolve().parent.parent / "apk-out" / APK_NAME,
+                Path.cwd() / APK_NAME,
+            ]
             apk = next((path for path in candidates if path.is_file()), None)
             if apk is None:
                 raise FileNotFoundError("Bundled APK is unavailable")

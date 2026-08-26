@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/apk_chunk.py": {
-      "includeFiles": "ShoshiLuna-2.5.3-full-runtime.apk",
+      "includeFiles": "apk-out/ShoshiLuna-latest.apk",
       "maxDuration": 60
     }
   }
