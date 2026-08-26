@@ -50,3 +50,6 @@ sha256sum apk-out/ShoshiLuna-latest.apk | tee apk-out/SHA256.txt
 cat > apk-out/index.html <<'HTML'
 <!doctype html><html><body><h1>SHOSHI LUNA APK build</h1><p><a href="/ShoshiLuna-latest.apk">Download APK</a></p><p><a href="/SHA256.txt">SHA-256</a></p></body></html>
 HTML
+
+# Keep only the final APK artifact inside the project tree before Vercel bundles functions.
+rm -rf app/build
