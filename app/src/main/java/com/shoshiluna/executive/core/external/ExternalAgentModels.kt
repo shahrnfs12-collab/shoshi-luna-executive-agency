@@ -4,7 +4,7 @@ import java.net.URI
 import java.util.UUID
 
 enum class ExternalTrustStatus { PENDING, TRUSTED, SUSPENDED, REVOKED }
-enum class ExternalProtocol { GENERIC_HTTPS_JSON, OPENAI_RESPONSES, A2A_HTTP, WEBHOOK }
+enum class ExternalProtocol { GENERIC_HTTPS_JSON, OPENAI_RESPONSES, OPENROUTER_CHAT, A2A_HTTP, WEBHOOK }
 enum class ExternalMessageStatus { PREPARED, APPROVAL_REQUIRED, SENT, RECEIVED, QUARANTINED, VERIFIED, FAILED }
 
 data class ExternalAgentDescriptor(
