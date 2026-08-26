@@ -9,7 +9,7 @@ data class AiProviderProtocol(
 
 /** Audited provider endpoints and authentication contracts. */
 object AiProviderProtocols {
-    const val OPENROUTER_CHAT_MODEL = "nvidia/nemotron-3-nano-30b-a3b:free"
+    const val OPENROUTER_CHAT_MODEL = "openrouter/free"
 
     fun custom(endpoint: String, model: String, authenticationHeader: String, authenticationPrefix: String): AiProviderProtocol {
         val url = java.net.URI(endpoint.trim())
