@@ -78,7 +78,7 @@ fun RevenueAgentNetworkSummary(agents: List<RevenueLearningAgent>, reports: List
             Text("REVENUE LEARNING NETWORK", color = Color(0xFFD8B45A), fontWeight = FontWeight.Bold)
             KpiRow("DAILY TARGET — NOT GUARANTEED", "$${RevenueAgentNetwork.DAILY_REVENUE_TARGET_USD.toInt()}", Color.Cyan)
             agents.sortedBy { it.role.ordinal }.forEach { agent ->
-                KpiRow(agent.role.name, agent.status.name, if (agent.status == RevenueAgentRunStatus.REPORTED) Color.Green else Color.White)
+                KpiRow(agent.role.name, agent.status.name, when (agent.status) { RevenueAgentRunStatus.REPORTED -> Color.Green; RevenueAgentRunStatus.FAILED -> Color.Red; RevenueAgentRunStatus.RUNNING -> Color.Cyan; else -> Color.White })\n                if (agent.status == RevenueAgentRunStatus.FAILED && !agent.lastReport.isNullOrBlank()) {\n                    Text("Reason: ${agent.lastReport}", color = Color(0xFFFF9A9A), style = MaterialTheme.typography.labelSmall)\n                }
             }
             Text("Reports to SHOSHI: ${reports.size} • AI findings remain unverified until evidence review.", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
             Text("Publishing, outreach, purchases and transfers require owner approval.", color = Color.Yellow, style = MaterialTheme.typography.labelSmall)
