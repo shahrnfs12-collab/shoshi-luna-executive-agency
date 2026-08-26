@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 object TrustedExternalAgentRegistry {
-    const val CODEX_ONE_ID = "codex-1-openai"
+    const val CODEX_ONE_ID = "codex-1-community"
     private val _agents = MutableStateFlow<Map<String, ExternalAgentDescriptor>>(emptyMap())
     val agents = _agents.asStateFlow()
 
@@ -14,9 +14,9 @@ object TrustedExternalAgentRegistry {
         if (_agents.value.containsKey(CODEX_ONE_ID)) return
         val candidate = ExternalAgentDescriptor(
             id = CODEX_ONE_ID,
-            displayName = "CODEX-1 • First Recruited Agent",
-            endpoint = "https://api.openai.com/v1/responses",
-            protocol = ExternalProtocol.OPENAI_RESPONSES,
+            displayName = "CODEX-1 • OpenRouter Community Agent",
+            endpoint = "https://openrouter.ai/api/v1/chat/completions",
+            protocol = ExternalProtocol.OPENROUTER_CHAT,
             trustStatus = ExternalTrustStatus.PENDING,
             capabilities = setOf(
                 "deep-research", "strategic-analysis", "coding", "debugging", "build-and-test",
