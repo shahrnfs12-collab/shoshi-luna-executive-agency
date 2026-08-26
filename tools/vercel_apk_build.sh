@@ -41,14 +41,14 @@ fi
 export PATH="$GRADLE_HOME/bin:$PATH"
 gradle --version
 
-echo "Building Android APK..."
+echo "Building Android APK from current main..."
 gradle --no-daemon --stacktrace assembleDebug
 
 test -s app/build/outputs/apk/debug/app-debug.apk
-cp app/build/outputs/apk/debug/app-debug.apk apk-out/ShoshiLuna-latest.apk
-sha256sum apk-out/ShoshiLuna-latest.apk | tee apk-out/SHA256.txt
+cp app/build/outputs/apk/debug/app-debug.apk apk-out/ShoshiLuna-2.5.4-latest.apk
+sha256sum apk-out/ShoshiLuna-2.5.4-latest.apk | tee apk-out/SHA256.txt
 cat > apk-out/index.html <<'HTML'
-<!doctype html><html><body><h1>SHOSHI LUNA APK build</h1><p><a href="/ShoshiLuna-latest.apk">Download APK</a></p><p><a href="/SHA256.txt">SHA-256</a></p></body></html>
+<!doctype html><html><body><h1>SHOSHI LUNA 2.5.4</h1><p><a href="/ShoshiLuna-2.5.4-latest.apk">Download APK</a></p><p><a href="/SHA256.txt">SHA-256</a></p></body></html>
 HTML
 
 rm -rf app/build
