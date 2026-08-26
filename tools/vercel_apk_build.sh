@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(pwd)"
-CACHE="$ROOT/.vercel-android"
+CACHE="/tmp/vercel-android"
 mkdir -p "$CACHE" "$ROOT/apk-out"
 
 JAVA_MAJOR="$(java -version 2>&1 | awk -F'[\".]' '/version/ {print $2; exit}' || true)"
@@ -50,8 +50,3 @@ sha256sum apk-out/ShoshiLuna-latest.apk | tee apk-out/SHA256.txt
 cat > apk-out/index.html <<'HTML'
 <!doctype html><html><body><h1>SHOSHI LUNA APK build</h1><p><a href="/ShoshiLuna-latest.apk">Download APK</a></p><p><a href="/SHA256.txt">SHA-256</a></p></body></html>
 HTML
-
-# This preview deployment is a temporary APK artifact host only.
-# Remove serverless sources so Vercel does not try to bundle the Android build workspace.
-rm -rf api
-rm -f requirements.txt pyproject.toml uv.lock Pipfile Pipfile.lock
