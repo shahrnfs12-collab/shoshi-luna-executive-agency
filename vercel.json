@@ -1,8 +1,0 @@
-{
-  "functions": {
-    "api/apk_chunk.py": {
-      "includeFiles": "apk-out/ShoshiLuna-latest.apk",
-      "maxDuration": 60
-    }
-  }
-}
