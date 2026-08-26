@@ -1,5 +1,6 @@
 package com.shoshiluna.executive.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,10 +8,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shoshiluna.executive.core.external.*
+import com.shoshiluna.executive.R
 import kotlinx.coroutines.launch
 
 private val NetworkGold = Color(0xFFE2C06B)
@@ -68,12 +73,35 @@ fun ExternalNetworkScreen() {
         items(agents.values.toList(), key = { it.id }) { agent ->
             ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = NetworkPanel), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    if (agent.id == TrustedExternalAgentRegistry.CODEX_ONE_ID) {
+                        Image(
+                            painter = painterResource(R.drawable.codex_1_executive),
+                            contentDescription = "CODEX-1 executive portrait",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().height(330.dp).clip(RoundedCornerShape(16.dp))
+                        )
+                    }
                     Text(agent.displayName, color = Color.White, fontWeight = FontWeight.Bold)
                     Text(agent.endpoint, color = Color.Gray, style = MaterialTheme.typography.bodySmall)
                     Text("${agent.protocol} • ${agent.trustStatus}", color = NetworkGold)
+                    if (agent.capabilities.isNotEmpty()) {
+                        Text(agent.capabilities.sorted().joinToString(" • "), color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (agent.trustStatus == ExternalTrustStatus.PENDING) {
-                            OutlinedButton(onClick = { TrustedExternalAgentRegistry.markTrusted(agent.id, null) }) { Text("Trust") }
+                            OutlinedButton(onClick = {
+                                scope.launch {
+                                    status = "Verifying ${agent.displayName}…"
+                                    val result = ExternalAgentGateway.handshake(agent.id)
+                                    status = result.fold(
+                                        {
+                                            TrustedExternalAgentRegistry.markTrusted(agent.id, it.proof)
+                                            "Verified and recruited: ${it.remoteIdentity}"
+                                        },
+                                        { "Recruitment blocked: ${it.message}" }
+                                    )
+                                }
+                            }) { Text("Verify & recruit") }
                         }
                         if (agent.trustStatus == ExternalTrustStatus.TRUSTED) {
                             OutlinedButton(onClick = {

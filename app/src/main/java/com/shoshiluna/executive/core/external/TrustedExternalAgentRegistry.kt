@@ -4,8 +4,28 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 object TrustedExternalAgentRegistry {
+    const val CODEX_ONE_ID = "codex-1-community"
     private val _agents = MutableStateFlow<Map<String, ExternalAgentDescriptor>>(emptyMap())
     val agents = _agents.asStateFlow()
+
+    /** Installs the owner's first real external-agent candidate without claiming it is connected. */
+    @Synchronized
+    fun bootstrapCodexOne() {
+        if (_agents.value.containsKey(CODEX_ONE_ID)) return
+        val candidate = ExternalAgentDescriptor(
+            id = CODEX_ONE_ID,
+            displayName = "CODEX-1 • OpenRouter Community Agent",
+            endpoint = "https://openrouter.ai/api/v1/chat/completions",
+            protocol = ExternalProtocol.OPENROUTER_CHAT,
+            trustStatus = ExternalTrustStatus.PENDING,
+            capabilities = setOf(
+                "deep-research", "strategic-analysis", "coding", "debugging", "build-and-test",
+                "security-review", "evidence-verification", "tool-design", "cost-benefit-analysis",
+                "opportunity-discovery", "technical-writing", "hebrew-english", "agent-orchestration"
+            )
+        )
+        _agents.value = _agents.value + (candidate.id to candidate)
+    }
 
     @Synchronized
     fun registerCandidate(descriptor: ExternalAgentDescriptor): Result<ExternalAgentDescriptor> {

@@ -21,7 +21,7 @@ class TreasuryEngineTest {
     }
 
     @Test
-    fun `test Treasury Allocation - 5 percent rule`() = runBlocking {
+    fun `test Treasury Allocation - owner 40 40 20 rule`() = runBlocking {
         val revenue = RevenueRecord(
             amount = 10000.0,
             status = RevenueStatus.RECEIVED,
@@ -41,7 +41,13 @@ class TreasuryEngineTest {
         
         assertNotNull(allocation)
         assertEquals(8000.0, allocation!!.verifiedNetProfit, 0.0)
-        assertEquals(400.0, allocation.allocationAmount, 0.0)
+        assertEquals(1600.0, allocation.allocationAmount, 0.0)
+        assertEquals(3200.0, allocation.distribution.bankAmount, 0.0)
+        assertEquals(3200.0, allocation.distribution.digitalWalletAmount, 0.0)
+        assertEquals(1600.0, allocation.distribution.developmentAmount, 0.0)
+        assertEquals(8000.0, allocation.distribution.totalAmount, 0.0)
+        assertTrue(allocation.distribution.requiresOwnerApproval)
+        assertFalse(allocation.distribution.bankDestinationAlias.any(Char::isDigit))
         assertEquals(TreasuryStatus.ALLOCATED, allocation.status)
     }
 

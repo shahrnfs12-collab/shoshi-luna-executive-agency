@@ -17,9 +17,11 @@ data class AutonomousMissionReceipt(
 )
 
 /**
- * Converts an explicit user goal into a bounded two-executive workflow.
- * External writes are deliberately excluded from the automatic portion; those
- * remain behind ToolGateway and HumanApprovalGateway.
+ * Goal-first adaptive workflow. SHOSHI/LUNA discover a path, research options,
+ * select tools/providers, produce a deliverable, critique it, recover from
+ * reversible failures, verify evidence, and iterate until the mission can be
+ * honestly declared complete. External/financial/destructive actions remain
+ * behind ToolGateway and HumanApproval.
  */
 object AutonomousMissionEngine {
     fun submitGoal(goal: String, requestedOwner: ExecutiveAgent): AutonomousMissionReceipt {
@@ -30,22 +32,32 @@ object AutonomousMissionEngine {
         val mission = EmpireMissionControl.createMission(cleanGoal, requestedOwner.id)
         val counterpart = if (requestedOwner == ExecutiveAgent.SHOSHI) ExecutiveAgent.LUNA else ExecutiveAgent.SHOSHI
         val plan = listOf(
-            MissionWorkItem(1, requestedOwner, "הגדרת התוצאה, המגבלות ומדדי ההצלחה"),
-            MissionWorkItem(2, counterpart, "בדיקת עובדות, סיכונים, חלופות ותלויות"),
-            MissionWorkItem(3, requestedOwner, "בניית תוצר ותוכנית ביצוע מבוססת ראיות"),
-            MissionWorkItem(4, counterpart, "בקרת איכות והצגת פעולות רגישות לאישור", requiresApproval = true)
+            MissionWorkItem(1, requestedOwner, "GOAL: infer desired outcome, constraints and measurable success from context; ask only for irreducible missing input"),
+            MissionWorkItem(2, counterpart, "RESEARCH LOOP: use permitted memory, browser/research, GitHub, agents and available tools to discover facts, options and dependencies before saying the task cannot be done"),
+            MissionWorkItem(3, requestedOwner, "DYNAMIC PLAN: generate task-specific steps and alternatives rather than relying on a fixed recipe; rank paths by expected quality, risk, time and cost"),
+            MissionWorkItem(4, counterpart, "TOOL DISCOVERY/ROUTING: identify the best available model, tool, API, library or provider for each subtask; prefer existing safe capabilities first"),
+            MissionWorkItem(5, requestedOwner, "CAPABILITY GAP: if a required capability is genuinely absent, create a Capability Build Proposal describing exactly what will be built, why it is required, dependencies, risks and verification plan; do not modify anything yet", requiresApproval = true),
+            MissionWorkItem(6, requestedOwner, "CAPABILITY BUILD: only after explicit HumanApproval, build the approved capability scope and verify it with tests/lint/build/runtime evidence before relying on it"),
+            MissionWorkItem(7, requestedOwner, "DELIVERABLE MODE: produce the actual useful artifact/result whenever technically available, not merely instructions describing how it could be produced"),
+            MissionWorkItem(8, counterpart, "CRITIC: attack the draft for factual gaps, weak assumptions, missed opportunities, security issues and better approaches; demand revision when material defects remain"),
+            MissionWorkItem(9, requestedOwner, "RECOVERY: on reversible failure retry intelligently, then switch tool/provider or re-plan before escalating to the user"),
+            MissionWorkItem(10, requestedOwner, "PERSISTENT GOAL: preserve current objective, attempted approaches, failures, evidence, open blockers and next action in mission state/memory"),
+            MissionWorkItem(11, counterpart, "SELF-EVALUATION: score goal progress, deliverable quality, evidence, autonomy and verification; never declare done merely because steps ran"),
+            MissionWorkItem(12, requestedOwner, "LEARNING: record outcome-based reusable lessons about successful/failed strategies without self-modifying security, approval or financial policy"),
+            MissionWorkItem(13, counterpart, "APPROVAL GATE: stop for irreducible user input or external, financial, credential-sensitive, destructive, irreversible or self-extension action requiring approval", requiresApproval = true),
+            MissionWorkItem(14, requestedOwner, "ITERATE: if Mission Completion Score is below verified-complete threshold, choose the highest-value correction and continue")
         )
         EmpireMissionControl.attachPlan(mission.id, plan.map { "${it.order}|${it.owner.id}|${it.requiresApproval}|${it.description}" })
-        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.PLANNED, "Autonomous work plan created")
-        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.ASSIGNED, "Work divided between SHOSHI and LUNA")
-        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Bounded autonomous analysis started")
-        EmpireMissionControl.updatePlanStep(mission.id, 1, "COMPLETED", "Goal and success criteria captured")
-        EmpireMissionControl.updatePlanStep(mission.id, 2, "RUNNING", "Counterpart review started")
+        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.PLANNED, "Adaptive goal-to-deliverable workflow created")
+        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.ASSIGNED, "Research, builder and critic roles assigned")
+        EmpireMissionControl.transitionStatus(mission.id, MissionStatus.RUNNING, "Autonomous mission intelligence loop started")
+        EmpireMissionControl.updatePlanStep(mission.id, 1, "COMPLETED", "Goal interpreted from available context")
+        EmpireMissionControl.updatePlanStep(mission.id, 2, "RUNNING", "Research and path discovery started")
         CollaborationEngine.startConsultation(
             missionId = mission.id,
             initiatorId = requestedOwner.id,
             targetId = counterpart.id,
-            topic = cleanGoal
+            topic = "Discover, build, critique and verify the strongest safe path to this goal. If a capability is missing, propose the exact extension and wait for owner approval before building it: $cleanGoal"
         )
         return AutonomousMissionReceipt(
             mission = EmpireMissionControl.state.value.missions.first { it.id == mission.id },
