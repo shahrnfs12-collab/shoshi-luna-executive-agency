@@ -18,8 +18,14 @@ interface WorkingCoreAiGateway {
 class DefaultWorkingCoreAiGateway(
     private val provider: AiProvider = OpenAiProvider()
 ) : WorkingCoreAiGateway {
-    override suspend fun send(agent: ExecutiveAgent, prompt: String): AiCallResult =
-        sendInternal(agent, prompt, missionId = null)
+    override suspend fun send(agent: ExecutiveAgent, prompt: String): AiCallResult {
+        // Legacy AutonomousMissionEngine call sites did not originally propagate missionId.
+        // Conservatively classify its structured "Mission:" prompts as mission-scoped so local
+        // continuity can never be promoted to AI-backed mission evidence while migration to the
+        // explicit sendMission API is completed.
+        val implicitMissionScope = if (looksLikeStructuredMissionPrompt(prompt)) "legacy-mission-scope" else null
+        return sendInternal(agent, prompt, implicitMissionScope)
+    }
 
     override suspend fun sendMission(agent: ExecutiveAgent, prompt: String, missionId: String): AiCallResult =
         sendInternal(agent, prompt, missionId)
@@ -37,5 +43,12 @@ class DefaultWorkingCoreAiGateway(
             missionId = missionId,
             agent = agent
         )
+    }
+
+    private fun looksLikeStructuredMissionPrompt(prompt: String): Boolean {
+        val normalized = prompt.trimStart()
+        return normalized.startsWith("Mission:", ignoreCase = true) &&
+            listOf("CAPABILITY_GAP:", "COMPLETION_GATE:", "REVIEW_GATE:", "research", "deliverable", "plan")
+                .any { marker -> normalized.contains(marker, ignoreCase = true) }
     }
 }
