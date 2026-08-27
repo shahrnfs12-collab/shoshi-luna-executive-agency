@@ -8,6 +8,10 @@ import com.shoshiluna.executive.core.security.ApiKeyManager
  * Key rotation is used only for key-specific auth/billing/permission failures.
  * Rate-limit, timeout and provider 5xx failures fail over to another provider instead of
  * cycling keys to bypass a service quota or rate-limit policy.
+ *
+ * When no cloud route is available, direct non-mission chat falls back to the explicit
+ * LocalContinuityEngine. Autonomous missions remain fail-closed because local templates
+ * must never be recorded as provider-backed mission evidence.
  */
 object ResilientAiClient {
     private val freeFirstPriority = listOf(
@@ -27,7 +31,7 @@ object ResilientAiClient {
         model: String
     ): AiCallResult {
         val configured = ApiKeyManager.configuredProviders(context)
-        if (configured.isEmpty()) return AiCallResult.Failure(AiConnectionState.API_KEY_MISSING, "No AI provider key is configured.")
+        if (configured.isEmpty()) return LocalContinuityEngine.tryHandle(messages)
 
         val active = ApiKeyManager.activeProvider(context)
         val ordered = buildList {
@@ -66,21 +70,34 @@ object ResilientAiClient {
 
             val failure = providerFailure ?: continue
             failures += "${provider.name}: ${failure.safeMessage}"
-            if (!shouldFailOverProvider(failure)) return failure
+            if (!shouldFailOverProvider(failure)) return fallbackOrFailure(messages, failure)
         }
 
         if (failures.isNotEmpty()) {
             val remaining = ordered.count { ApiKeyManager.getProviderKeys(context, it).isNotEmpty() } - attemptedProviders
             val suffix = if (remaining > 0) " ${remaining} additional configured route(s) will be reconsidered on the next request." else ""
             val state = last?.state ?: AiConnectionState.ERROR
-            return AiCallResult.Failure(
+            val aggregate = AiCallResult.Failure(
                 state,
                 "AI provider route failed. ${failures.joinToString(" | ")}$suffix",
                 last?.httpCode
             )
+            return fallbackOrFailure(messages, aggregate)
         }
-        return last ?: AiCallResult.Failure(AiConnectionState.ERROR, "No configured AI provider completed the request.")
+
+        return fallbackOrFailure(
+            messages,
+            last ?: AiCallResult.Failure(AiConnectionState.ERROR, "No configured AI provider completed the request.")
+        )
     }
+
+    private fun fallbackOrFailure(messages: List<ChatMessage>, cloudFailure: AiCallResult.Failure): AiCallResult =
+        when (val local = LocalContinuityEngine.tryHandle(messages)) {
+            is AiCallResult.Success -> local
+            is AiCallResult.Failure -> cloudFailure.copy(
+                safeMessage = "${cloudFailure.safeMessage} Local mission fallback remained fail-closed: ${local.safeMessage}"
+            )
+        }
 
     internal fun shouldTryNextKey(failure: AiCallResult.Failure): Boolean =
         failure.httpCode in setOf(401, 402, 403)
