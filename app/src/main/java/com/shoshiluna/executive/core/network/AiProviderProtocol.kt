@@ -10,6 +10,7 @@ data class AiProviderProtocol(
 /** Audited provider endpoints and authentication contracts. */
 object AiProviderProtocols {
     const val OPENROUTER_CHAT_MODEL = "openrouter/free"
+    const val OPENAI_DEFAULT_MODEL = "gpt-5.4"
 
     fun custom(endpoint: String, model: String, authenticationHeader: String, authenticationPrefix: String): AiProviderProtocol {
         val url = java.net.URI(endpoint.trim())
@@ -21,7 +22,7 @@ object AiProviderProtocols {
     fun forProvider(provider: AiProviderId): AiProviderProtocol = when (provider) {
         AiProviderId.OPENAI -> AiProviderProtocol(
             endpoint = "https://api.openai.com/v1/responses",
-            defaultModel = "gpt-5.6-luna",
+            defaultModel = OPENAI_DEFAULT_MODEL,
             authenticationHeader = "Authorization",
             authenticationPrefix = "Bearer "
         )
