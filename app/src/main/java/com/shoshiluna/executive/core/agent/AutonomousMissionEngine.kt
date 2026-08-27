@@ -6,6 +6,7 @@ import com.shoshiluna.executive.core.empire.EmpireMission
 import com.shoshiluna.executive.core.empire.EmpireMissionControl
 import com.shoshiluna.executive.core.empire.MissionStatus
 import com.shoshiluna.executive.core.network.AiCallResult
+import com.shoshiluna.executive.core.network.AiConnectionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,10 +27,10 @@ data class AutonomousMissionReceipt(
 /**
  * Goal-first adaptive workflow.
  *
- * submitGoal() creates the durable mission state and then starts a bounded real AI
- * execution loop. The loop never performs external/financial/destructive actions.
- * If the requested outcome requires a new capability or an approval-gated action,
- * the mission stops in WAITING_FOR_APPROVAL instead of pretending it completed.
+ * submitGoal() creates durable mission state and starts a bounded real-AI execution loop.
+ * Local/no-API continuity is deliberately NOT accepted as provider-backed mission reasoning:
+ * when cloud reasoning is unavailable the mission is preserved in an explicit waiting state
+ * so deterministic agency work can continue without fabricating AI evidence or completion.
  */
 object AutonomousMissionEngine {
     private val runtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -71,6 +72,11 @@ object AutonomousMissionEngine {
             targetId = counterpart.id,
             topic = "Discover, build, critique and verify the strongest safe path to this goal: $cleanGoal"
         )
+
+        // Deterministic business orchestration is independent of cloud AI. Starting the local
+        // pipeline here keeps mission/business state alive in no-key mode without claiming that
+        // any AI reasoning or external action has happened.
+        runCatching { AgencyOrchestrator.startPipeline(mission.id) }
 
         val receipt = AutonomousMissionReceipt(
             mission = EmpireMissionControl.state.value.missions.first { it.id == mission.id },
@@ -228,6 +234,8 @@ object AutonomousMissionEngine {
             EmpireMissionControl.transitionStatus(missionId, MissionStatus.REVIEW, "Both executive agents completed real provider-backed passes")
             EmpireMissionControl.transitionStatus(missionId, MissionStatus.COMPLETED, "Final result produced; provider round-trips and mission state were recorded as runtime evidence")
             recordVerifiedRuntimeEvent(missionId, owner, "MISSION_COMPLETE", "Mission completed after SHOSHI/LUNA research, creation, critique and synthesis")
+        } catch (e: AiProviderException) {
+            pauseForAiDependency(missionId, e)
         } catch (t: Throwable) {
             failMission(missionId, t)
         }
@@ -241,7 +249,7 @@ object AutonomousMissionEngine {
         prompt: String
     ): String {
         ExecutivePresenceEngine.set(agent, ExecutivePresenceState.WORKING, "$stage · mission ${missionId.take(8)}")
-        return when (val result = gateway.send(agent, prompt)) {
+        return when (val result = gateway.sendMission(agent, prompt, missionId)) {
             is AiCallResult.Success -> {
                 val text = result.text.trim()
                 require(text.isNotBlank()) { "$stage returned an empty AI response" }
@@ -256,11 +264,44 @@ object AutonomousMissionEngine {
                 text
             }
             is AiCallResult.Failure -> {
-                EmpireMissionControl.updatePlanStep(missionId, step, "FAILED", "$stage provider failure: ${result.safeMessage}")
+                val recoverableDependency = result.state in setOf(
+                    AiConnectionState.API_KEY_MISSING,
+                    AiConnectionState.OFFLINE,
+                    AiConnectionState.RATE_LIMITED
+                ) || result.httpCode in setOf(401, 402, 403, 429)
+                EmpireMissionControl.updatePlanStep(
+                    missionId,
+                    step,
+                    if (recoverableDependency) "WAITING" else "FAILED",
+                    "$stage provider failure: ${result.safeMessage}"
+                )
                 ExecutivePresenceEngine.set(agent, ExecutivePresenceState.ERROR, result.safeMessage)
-                throw IllegalStateException("$stage failed: ${result.safeMessage}")
+                throw AiProviderException(result.state, "$stage failed: ${result.safeMessage}", result.httpCode)
             }
         }
+    }
+
+    private fun pauseForAiDependency(missionId: String, error: AiProviderException) {
+        val requiresCredentialAction = error.state == AiConnectionState.API_KEY_MISSING || error.httpCode in setOf(401, 402, 403)
+        val waitingStatus = if (requiresCredentialAction) MissionStatus.WAITING_FOR_USER else MissionStatus.WAITING_FOR_DEPENDENCY
+        val condition = if (requiresCredentialAction) {
+            "A valid owner-configured AI credential/provider route is required before AI-backed mission reasoning can resume. Local deterministic agency services remain available."
+        } else {
+            "AI provider/network capacity is temporarily unavailable. Resume automatically/manual retry when the dependency becomes available; do not fabricate AI-backed completion."
+        }
+        runCatching {
+            val mission = EmpireMissionControl.state.value.missions.firstOrNull { it.id == missionId }
+            if (mission != null && mission.status !in setOf(MissionStatus.COMPLETED, MissionStatus.FAILED, MissionStatus.HALTED, MissionStatus.CANCELLED, MissionStatus.REJECTED)) {
+                EmpireMissionControl.enterWaitingState(missionId, waitingStatus, condition)
+            }
+        }
+        EvidenceRegistry.record(
+            category = EvidenceCategory.VERIFIED_RESULT,
+            content = "Mission paused at AI dependency boundary: ${error.message}",
+            source = "AutonomousMissionEngine/runtime",
+            missionId = missionId
+        )
+        ExecutivePresenceEngine.idleBoth()
     }
 
     private fun recordVerifiedRuntimeEvent(missionId: String, agent: ExecutiveAgent, stage: String, detail: String) {

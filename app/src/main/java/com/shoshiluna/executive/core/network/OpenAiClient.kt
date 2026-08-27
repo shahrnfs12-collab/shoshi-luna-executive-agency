@@ -28,7 +28,7 @@ sealed interface AiCallResult {
 }
 
 object OpenAiClient {
-    private const val DEFAULT_MODEL = "gpt-5.6-luna"
+    private const val DEFAULT_MODEL = AiProviderProtocols.OPENAI_DEFAULT_MODEL
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
