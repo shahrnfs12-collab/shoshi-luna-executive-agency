@@ -3,6 +3,7 @@ package com.shoshiluna.executive.core.agent
 import com.shoshiluna.executive.core.network.AiCallResult
 import com.shoshiluna.executive.core.network.ChatMessage
 import com.shoshiluna.executive.core.network.ResilientAiClient
+import com.shoshiluna.executive.core.network.AiProviderProtocols
 import com.shoshiluna.executive.core.engine.TitanEngine
 
 class AiProviderException(
@@ -84,7 +85,7 @@ object AgentSystemPrompts {
 }
 
 object AgentModelPolicy {
-    const val DREAM_DEFAULT_MODEL = "gpt-5.6-luna"
+    const val DREAM_DEFAULT_MODEL = AiProviderProtocols.OPENAI_DEFAULT_MODEL
     fun modelFor(agent: ExecutiveAgent): String = DREAM_DEFAULT_MODEL
 }
 
