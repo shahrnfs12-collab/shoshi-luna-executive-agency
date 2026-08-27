@@ -1,0 +1,74 @@
+name: v2.5.4 Master Repair Baseline
+
+on:
+  push:
+    branches:
+      - 'codex/v2.5.4-master-repair'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout frozen source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Record baseline
+        shell: bash
+        run: |
+          mkdir -p verification-output
+          git rev-parse HEAD > verification-output/COMMIT_SHA.txt
+          git ls-files | sort > verification-output/REPOSITORY_FILES.txt
+          java -version 2> verification-output/JAVA_VERSION.txt
+          chmod +x gradlew
+          ./gradlew --version > verification-output/GRADLE_VERSION.txt
+
+      - name: Clean
+        run: ./gradlew clean --stacktrace
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Lint
+        run: ./gradlew lintDebug --stacktrace
+
+      - name: Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Release APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Collect physical artifacts
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p verification-output/apks verification-output/reports
+          find app/build/outputs/apk -type f -name '*.apk' -exec cp {} verification-output/apks/ \; 2>/dev/null || true
+          find app/build/reports -type f -maxdepth 5 -exec cp --parents {} verification-output/reports/ \; 2>/dev/null || true
+          find verification-output -type f -print0 | sort -z | xargs -0 sha256sum > verification-output/SHA256SUMS.txt
+          git archive --format=zip --output=verification-output/SHOSHI_LUNA_v2.5.4_FROZEN_SOURCE.zip HEAD
+          sha256sum verification-output/SHOSHI_LUNA_v2.5.4_FROZEN_SOURCE.zip >> verification-output/SHA256SUMS.txt
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2.5.4-baseline-evidence
+          path: verification-output/
+          if-no-files-found: error
+          retention-days: 30
