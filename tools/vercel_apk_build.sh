@@ -41,14 +41,24 @@ fi
 export PATH="$GRADLE_HOME/bin:$PATH"
 gradle --version
 
-echo "Building Android APK from current main..."
+VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n1)"
+VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -n1)"
+if [ -z "$VERSION_NAME" ] || [ -z "$VERSION_CODE" ]; then
+  echo "Unable to derive Android version identity from app/build.gradle.kts" >&2
+  exit 2
+fi
+SAFE_VERSION="$(printf '%s' "$VERSION_NAME" | tr -cs 'A-Za-z0-9._-' '-')"
+ARTIFACT="ShoshiLuna-${SAFE_VERSION}-vc${VERSION_CODE}-debug.apk"
+
+printf 'Building Android APK from checked-out source ref. versionName=%s versionCode=%s\n' "$VERSION_NAME" "$VERSION_CODE"
+
 gradle --no-daemon --stacktrace assembleDebug
 
 test -s app/build/outputs/apk/debug/app-debug.apk
-cp app/build/outputs/apk/debug/app-debug.apk apk-out/ShoshiLuna-2.5.4-latest.apk
-sha256sum apk-out/ShoshiLuna-2.5.4-latest.apk | tee apk-out/SHA256.txt
-cat > apk-out/index.html <<'HTML'
-<!doctype html><html><body><h1>SHOSHI LUNA 2.5.4</h1><p><a href="/ShoshiLuna-2.5.4-latest.apk">Download APK</a></p><p><a href="/SHA256.txt">SHA-256</a></p></body></html>
+cp app/build/outputs/apk/debug/app-debug.apk "apk-out/$ARTIFACT"
+sha256sum "apk-out/$ARTIFACT" | tee apk-out/SHA256.txt
+cat > apk-out/index.html <<HTML
+<!doctype html><html><body><h1>SHOSHI LUNA ${VERSION_NAME}</h1><p>versionCode: ${VERSION_CODE}</p><p><a href="/${ARTIFACT}">Download APK</a></p><p><a href="/SHA256.txt">SHA-256</a></p></body></html>
 HTML
 
 rm -rf app/build
