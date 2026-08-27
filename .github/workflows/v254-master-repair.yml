@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'codex/v2.5.4-master-repair'
+      - 'no-api-continuity'
   workflow_dispatch:
 
 permissions:
