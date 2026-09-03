@@ -1,0 +1,13 @@
+runpod>=1.8.1,<2
+torch>=2.8.0
+torchvision>=0.23.0
+diffusers>=0.35.1
+transformers>=4.57.0
+accelerate>=1.10.0
+huggingface_hub[hf_xet]>=0.34.0
+safetensors>=0.6.2
+Pillow>=11.3.0
+imageio>=2.37.0
+imageio-ffmpeg>=0.6.0
+sentencepiece>=0.2.1
+protobuf>=6.32.0
