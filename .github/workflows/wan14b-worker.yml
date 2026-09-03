@@ -6,6 +6,10 @@ on:
     paths:
       - "runpod/wan14b-worker/**"
       - ".github/workflows/wan14b-worker.yml"
+  pull_request:
+    paths:
+      - "runpod/wan14b-worker/**"
+      - ".github/workflows/wan14b-worker.yml"
   workflow_dispatch:
 
 permissions:
@@ -14,6 +18,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,9 +26,11 @@ jobs:
           python-version: "3.11"
       - name: Validate Python syntax
         run: python -m py_compile runpod/wan14b-worker/handler.py
-      - name: Validate required files
+      - name: Validate worker contract
         run: |
           test -s runpod/wan14b-worker/Dockerfile
           test -s runpod/wan14b-worker/requirements.txt
           grep -q "HF_TOKEN" runpod/wan14b-worker/handler.py
           grep -q "MAX_SECONDS" runpod/wan14b-worker/handler.py
+          grep -q 'MAX_SECONDS=10' runpod/wan14b-worker/Dockerfile
+          grep -q 'Wan-AI/Wan2.2-I2V-A14B-Diffusers' runpod/wan14b-worker/Dockerfile
