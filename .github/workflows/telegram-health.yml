@@ -1,0 +1,30 @@
+name: Telegram Bot Health
+
+on:
+  push:
+    paths:
+      - '.github/workflows/telegram-health.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  telegram-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Telegram bot token
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+            echo "TELEGRAM_BOT_TOKEN is not configured"
+            exit 1
+          fi
+          API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
+          ME="$(curl -fsS "${API}/getMe")"
+          echo "$ME" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True; r=d["result"]; print("bot_ok=true"); print("bot_username="+str(r.get("username","")))'
+          WH="$(curl -fsS "${API}/getWebhookInfo")"
+          echo "$WH" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True; r=d["result"]; print("webhook_configured="+str(bool(r.get("url"))).lower()); print("pending_update_count="+str(r.get("pending_update_count",0)))'
