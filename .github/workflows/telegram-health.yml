@@ -7,12 +7,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   telegram-health:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Verify Telegram bot token
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -20,11 +21,54 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
-            echo "TELEGRAM_BOT_TOKEN is not configured"
-            exit 1
+            echo '{"bot_ok":false,"error":"missing_secret"}' > telegram_health.json
+          else
+            API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
+            ME="$(curl -fsS "${API}/getMe")"
+            WH="$(curl -fsS "${API}/getWebhookInfo")"
+            python3 - <<'PY'
+import json, os
+me=json.loads(os.environ['ME_JSON'])
+wh=json.loads(os.environ['WH_JSON'])
+r=me.get('result',{})
+w=wh.get('result',{})
+out={
+  'bot_ok': bool(me.get('ok')),
+  'bot_username': r.get('username',''),
+  'webhook_configured': bool(w.get('url')),
+  'pending_update_count': w.get('pending_update_count',0)
+}
+open('telegram_health.json','w').write(json.dumps(out,ensure_ascii=False,indent=2))
+PY
           fi
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ME_JSON: ${{ steps.none.outputs.none }}
+      - name: Write health result safely
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
           API="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}"
           ME="$(curl -fsS "${API}/getMe")"
-          echo "$ME" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True; r=d["result"]; print("bot_ok=true"); print("bot_username="+str(r.get("username","")))'
           WH="$(curl -fsS "${API}/getWebhookInfo")"
-          echo "$WH" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True; r=d["result"]; print("webhook_configured="+str(bool(r.get("url"))).lower()); print("pending_update_count="+str(r.get("pending_update_count",0)))'
+          ME_JSON="$ME" WH_JSON="$WH" python3 - <<'PY'
+import json, os
+me=json.loads(os.environ['ME_JSON'])
+wh=json.loads(os.environ['WH_JSON'])
+r=me.get('result',{})
+w=wh.get('result',{})
+out={
+  'bot_ok': bool(me.get('ok')),
+  'bot_username': r.get('username',''),
+  'webhook_configured': bool(w.get('url')),
+  'pending_update_count': w.get('pending_update_count',0)
+}
+open('telegram_health.json','w').write(json.dumps(out,ensure_ascii=False,indent=2))
+PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add telegram_health.json
+          git commit -m "Update Telegram health status" || exit 0
+          git push
