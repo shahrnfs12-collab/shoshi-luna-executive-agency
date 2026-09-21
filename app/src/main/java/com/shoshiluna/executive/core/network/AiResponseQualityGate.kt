@@ -1,8 +1,9 @@
 package com.shoshiluna.executive.core.network
 
+import java.text.Normalizer
+
 /**
- * Prevents classifier/moderation labels from being accepted as executive conversation.
- * Transport success alone is not proof of a usable AI response.
+ * Rejects non-conversational output and removes provider-side repetition before it reaches chat.
  */
 object AiResponseQualityGate {
     private val classifierOnly = listOf(
@@ -13,8 +14,37 @@ object AiResponseQualityGate {
     )
 
     fun isUsable(text: String): Boolean {
-        val clean = text.trim()
+        val clean = sanitize(text)
         if (clean.length < 2) return false
         return classifierOnly.none { it.matches(clean) }
+    }
+
+    /**
+     * Keeps the first occurrence of a repeated paragraph/list item while preserving order.
+     * Providers sometimes echo the same block with different spacing or punctuation.
+     */
+    fun sanitize(text: String): String {
+        val normalized = Normalizer.normalize(text, Normalizer.Form.NFC)
+            .replace("\r\n", "\n")
+            .replace(Regex("""[ \t]+"""), " ")
+            .replace(Regex(""" *\n *"""), "\n")
+            .replace(Regex("""\n{3,}"""), "\n\n")
+            .replace(Regex("""([!?.,])\1{2,}"""), "$1$1")
+            .trim()
+
+        if (normalized.isBlank()) return ""
+
+        val seen = LinkedHashSet<String>()
+        return normalized
+            .split(Regex("""\n\s*\n"""))
+            .map { it.trim() }
+            .filter { block ->
+                val key = block
+                    .lowercase()
+                    .replace(Regex("""[\p{P}\p{S}\s]+"""), "")
+                key.isBlank() || seen.add(key)
+            }
+            .joinToString("\n\n")
+            .trim()
     }
 }
