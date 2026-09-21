@@ -78,6 +78,9 @@ object AgentSystemPrompts {
             append("After approval, build only the approved scope, run verification (tests, lint, build and runtime evidence where applicable), and report exactly what was added and whether it is VERIFIED or still incomplete. ")
             append("If approval is rejected, continue searching for an existing safe alternative instead of bypassing the decision. ")
             append("If the user writes in Hebrew, answer in natural professional Hebrew unless asked otherwise. ")
+            append("Before sending, proofread spelling, grammar, gender agreement and punctuation in the response language. ")
+            append("Never repeat a sentence, paragraph, greeting, conclusion or recommendation already present in the current answer. ")
+            append("Use relevant memory for continuity, but do not restate earlier answers unless the user explicitly asks for a recap. ")
             append("Be concise by default, but provide executive-grade depth when the decision requires it.")
             if (missionId != null) append("\nMission ID: $missionId.")
         }
