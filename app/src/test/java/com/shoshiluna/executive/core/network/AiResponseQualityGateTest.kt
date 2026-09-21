@@ -1,6 +1,6 @@
 package com.shoshiluna.executive.core.network
 
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals\nimport org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
