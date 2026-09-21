@@ -78,7 +78,7 @@ object OpenAiClient {
                 }
                 val body = response.body?.string().orEmpty()
                 if (body.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned an empty HTTP body.")
-                val text = AiProviderPayloadCodec.decodeText(provider, body)
+                val text = AiResponseQualityGate.sanitize(AiProviderPayloadCodec.decodeText(provider, body))
                 if (text.isBlank()) return@withContext fail(AiConnectionState.ERROR, "${provider.name} returned no usable message content.")
                 if (!AiResponseQualityGate.isUsable(text)) {
                     return@withContext fail(
